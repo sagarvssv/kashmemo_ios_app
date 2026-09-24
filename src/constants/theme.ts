@@ -1,65 +1,41 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
+export const colors = {
+  primary: '#0e4b14',
+  primaryDark: '#1E2875',
+  accentTeal: '#2d4943',
+  background: '#e4efe3',
+  surface: '#ffffff',
+  textPrimary: '#212922',
+  textSecondary: '#153e91',
+  textMuted: '#5b6b5d',
+  inputBackground: '#fffcfc',
+  border: '#123528',
+  borderLight: '#cfdccd',
+  success: '#02170a',
+  danger: '#EF4444',
+  warning: '#B45309',
+  info: '#1D4ED8',
+};
 
-import '@/global.css';
-
-import { Platform } from 'react-native';
-
-export const Colors = {
-  light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
-  },
-  dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
-  },
+export const statusColors = {
+  PENDING: { background: '#FEF3C7', text: '#92400E' },
+  PARTIALLY_APPROVED: { background: '#DBEAFE', text: '#1E40AF' },
+  APPROVED: { background: '#DCFCE7', text: '#166534' },
+  REJECTED: { background: '#FEE2E2', text: '#991B1B' },
+  DISBURSED: { background: '#E0E7FF', text: '#3730A3' },
 } as const;
 
-export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
-
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: 'var(--font-display)',
-    serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
-    mono: 'var(--font-mono)',
-  },
-});
-
-export const Spacing = {
-  half: 2,
+export const spacing = {
   one: 4,
   two: 8,
-  three: 16,
-  four: 24,
-  five: 32,
-  six: 64,
-} as const;
+  three: 12,
+  four: 16,
+  five: 20,
+  six: 24,
+  eight: 32,
+};
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
-export const MaxContentWidth = 800;
+export const radius = {
+  small: 8,
+  medium: 12,
+  large: 16,
+};
