@@ -4,7 +4,8 @@ import { KeyboardAvoidingView, KeyboardTypeOptions, Modal, Platform, Pressable, 
 import { PrimaryButton } from '@/components/primary-button';
 import { InlineError } from '@/components/states';
 import { TextField } from '@/components/text-field';
-import { colors, spacing } from '@/constants/theme';
+import { type Palette, useThemedStyles } from '@/constants/brand';
+import { spacing, typography } from '@/constants/theme';
 import { errorMessage } from '@/lib/api';
 
 export type PromptField = {
@@ -48,6 +49,7 @@ function PromptSheet({
   onSubmit,
   onClose,
 }: Omit<PromptModalProps, 'visible'>) {
+  const styles = useThemedStyles(makeStyles);
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(fields.map((field) => [field.key, field.initialValue ?? ''])),
   );
@@ -105,7 +107,8 @@ function PromptSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) =>
+  StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -120,12 +123,11 @@ const styles = StyleSheet.create({
     gap: spacing.four,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '700',
+    ...typography.headline,
     color: colors.textPrimary,
   },
   message: {
-    fontSize: 14,
+    ...typography.callout,
     color: colors.textMuted,
   },
   actions: {

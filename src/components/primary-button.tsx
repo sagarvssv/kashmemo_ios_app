@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleProp, StyleSheet, Text, ViewStyle } from 'react-native';
+import { ActivityIndicator, StyleProp, StyleSheet, Text, ViewStyle } from 'react-native';
 
-import { colors } from '@/constants/theme';
+import { PressableScale } from '@/components/motion';
+import { type Palette, useBrand, useThemedStyles } from '@/constants/brand';
+import { typography } from '@/constants/theme';
 
 type Variant = 'primary' | 'secondary' | 'danger';
 
@@ -27,21 +29,23 @@ export function PrimaryButton({
   compact,
   style,
 }: PrimaryButtonProps) {
+  const styles = useThemedStyles(makeStyles);
+  const brand = useBrand();
   const isDisabled = disabled || loading;
-  const textColor = variant === 'secondary' ? colors.primary : '#FFFFFF';
+  const textColor = variant === 'secondary' ? brand.primary : '#FFFFFF';
 
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       disabled={isDisabled}
       accessibilityRole="button"
-      style={({ pressed }) => [
+      style={[
         styles.button,
+        { backgroundColor: brand.primary, shadowColor: brand.primary },
         compact && styles.compact,
-        variant === 'secondary' && styles.secondary,
+        variant === 'secondary' && [styles.secondary, { borderColor: brand.primary }],
         variant === 'danger' && styles.danger,
         isDisabled && (variant === 'secondary' ? styles.secondaryDisabled : styles.buttonDisabled),
-        pressed && !isDisabled && styles.pressed,
         style,
       ]}>
       {loading ? (
@@ -52,11 +56,12 @@ export function PrimaryButton({
           <Text style={[styles.label, { color: textColor }]}>{label}</Text>
         </>
       )}
-    </Pressable>
+    </PressableScale>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) =>
+  StyleSheet.create({
   button: {
     height: 52,
     borderRadius: 12,
@@ -65,15 +70,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     paddingHorizontal: 16,
-    backgroundColor: colors.primary,
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   compact: {
     height: 42,
   },
   secondary: {
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    shadowOpacity: 0,
+    elevation: 0,
     borderWidth: 1,
-    borderColor: colors.primary,
   },
   danger: {
     backgroundColor: colors.danger,
@@ -81,15 +90,13 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     backgroundColor: colors.border,
     opacity: 0.6,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   secondaryDisabled: {
     opacity: 0.5,
   },
-  pressed: {
-    opacity: 0.85,
-  },
   label: {
-    fontSize: 16,
-    fontWeight: '600',
+    ...typography.button,
   },
 });

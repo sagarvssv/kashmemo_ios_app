@@ -7,19 +7,28 @@ import { Screen } from '@/components/screen';
 import { SelectField } from '@/components/select-field';
 import { InlineError } from '@/components/states';
 import { TextField } from '@/components/text-field';
-import { colors } from '@/constants/theme';
+import { type Palette, useThemedStyles } from '@/constants/brand';
+import { typography } from '@/constants/theme';
 import { errorMessage } from '@/lib/api';
 import { authApi } from '@/lib/endpoints';
 import { humanize } from '@/lib/format';
+import { COUNTRIES, DEFAULT_COUNTRY } from '@/lib/countries';
 import { INDUSTRY_TYPES, type IndustryType } from '@/lib/types';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const COUNTRY_OPTIONS = COUNTRIES.map((country) => ({
+  value: country.name,
+  label: `${country.flag}  ${country.name}`,
+  keywords: country.code,
+}));
+
 export default function SignupScreen() {
+  const styles = useThemedStyles(makeStyles);
   const [companyName, setCompanyName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [industryType, setIndustryType] = useState<IndustryType | null>(null);
-  const [country, setCountry] = useState('India');
+  const [country, setCountry] = useState(DEFAULT_COUNTRY);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -74,8 +83,18 @@ export default function SignupScreen() {
         value={industryType}
         onChange={(value) => setIndustryType(value as IndustryType)}
         options={INDUSTRY_TYPES.map((type) => ({ value: type, label: humanize(type) }))}
+        searchable
+        searchPlaceholder="Search industries"
       />
-      <TextField label="Country" icon="globe-outline" value={country} onChangeText={setCountry} />
+      <SelectField
+        label="Country"
+        placeholder="Choose your country"
+        value={country}
+        onChange={setCountry}
+        searchable
+        searchPlaceholder="Search countries"
+        options={COUNTRY_OPTIONS}
+      />
       <TextField
         label="Work email"
         icon="mail-outline"
@@ -109,9 +128,10 @@ export default function SignupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) =>
+  StyleSheet.create({
   hint: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.textMuted,
     marginTop: -8,
   },
@@ -120,7 +140,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     textAlign: 'center',
-    fontSize: 13,
+    ...typography.footnote,
     color: colors.textMuted,
   },
   link: {

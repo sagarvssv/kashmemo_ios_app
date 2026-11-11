@@ -39,8 +39,19 @@ function buildUrl(path: string, query?: Query) {
   return params.length ? `${url}?${params.join('&')}` : url;
 }
 
+
+
+// Zod's flatten() output, which the backend returns as `details` on validation errors.
+function firstFieldError(details: unknown): string | undefined {
+  if (!details || typeof details !== 'object') return undefined;
+  const { fieldErrors, formErrors } = details as { fieldErrors?: Record<string, string[]>; formErrors?: string[] };
+  return Object.values(fieldErrors ?? {}).flat()[0] ?? formErrors?.[0];
+}
+
 function messageFrom(body: unknown, status: number): string {
   if (body && typeof body === 'object') {
+    const fieldError = firstFieldError((body as { details?: unknown }).details);
+    if (fieldError) return fieldError;
     const candidate = (body as { message?: unknown; error?: unknown }).message ?? (body as { error?: unknown }).error;
     if (typeof candidate === 'string' && candidate.length > 0) return candidate;
   }

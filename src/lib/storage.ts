@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 const ACCESS_TOKEN_KEY = 'kashmemo_auth_token';
 const REFRESH_TOKEN_KEY = 'kashmemo_auth_token_refresh';
 const USER_KEY = 'kashmemo_session_user';
+const DISPLAY_CURRENCY_KEY = 'kashmemo_display_currency';
 
 // SecureStore is native-only; on web fall back to localStorage so the app is
 // still usable in a browser during development.
@@ -73,4 +74,21 @@ export async function writeStoredUser(user: unknown) {
 
 export async function clearSessionStorage() {
   await Promise.all([deleteItem(ACCESS_TOKEN_KEY), deleteItem(REFRESH_TOKEN_KEY), deleteItem(USER_KEY)]);
+}
+
+// Device preference: survives sign-out, so it isn't part of clearSessionStorage().
+export async function readDisplayCurrency(): Promise<{ code: string; rate: number } | null> {
+  const raw = await getItem(DISPLAY_CURRENCY_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { code?: unknown; rate?: unknown };
+    if (typeof parsed.code !== 'string' || typeof parsed.rate !== 'number' || !(parsed.rate > 0)) return null;
+    return { code: parsed.code, rate: parsed.rate };
+  } catch {
+    return null;
+  }
+}
+
+export async function writeDisplayCurrency(value: { code: string; rate: number }) {
+  await setItem(DISPLAY_CURRENCY_KEY, JSON.stringify(value));
 }

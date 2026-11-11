@@ -1,15 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link, router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { AuroraBackground } from '@/components/aurora-background';
+import { GlassSurface } from '@/components/glass';
 
 import { PrimaryButton } from '@/components/primary-button';
 import { TextField } from '@/components/text-field';
-import { colors, spacing } from '@/constants/theme';
+import { type Palette, useThemedStyles } from '@/constants/brand';
+import { spacing, typography } from '@/constants/theme';
 import { useSession } from '@/context/session';
 
+const VCLOUDMASTER_URL = 'https://www.vcloudmaster.com';
+
 export default function LoginScreen() {
+  const styles = useThemedStyles(makeStyles);
   const { signIn } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,6 +54,7 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <AuroraBackground />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -53,14 +63,19 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
-            <View style={styles.logoMark}>
+            <Animated.View entering={ZoomIn.springify().damping(12)} style={styles.logoMark}>
               <Ionicons name="leaf" size={28} color="#FFFFFF" />
-            </View>
-            <Text style={styles.title}>KashMemo</Text>
-            <Text style={styles.tagline}>Raise. Track. Get Paid.</Text>
+            </Animated.View>
+            <Animated.Text entering={FadeInDown.delay(150).duration(450)} style={styles.title}>
+              KashMemo
+            </Animated.Text>
+            <Animated.Text entering={FadeInDown.delay(250).duration(450)} style={styles.tagline}>
+              Raise. Track. Get Paid.
+            </Animated.Text>
           </View>
 
-          <View style={styles.form}>
+          <Animated.View entering={FadeInDown.delay(350).duration(500).springify().damping(18)}>
+          <GlassSurface style={styles.form}>
             <TextField
               icon="mail-outline"
               placeholder="Email address"
@@ -99,16 +114,27 @@ export default function LoginScreen() {
             <Text style={styles.employeeHint}>
               Employees receive their login details from their organisation by email.
             </Text>
-          </View>
+          </GlassSurface>
+          </Animated.View>
 
-          <Text style={styles.footer}>Powered by Your Organization</Text>
+          <Text style={styles.footer}>
+            Powered by{' '}
+            <Text
+              style={styles.footerLink}
+              onPress={() => void WebBrowser.openBrowserAsync(VCLOUDMASTER_URL).catch(() => Linking.openURL(VCLOUDMASTER_URL))}
+              accessibilityRole="link"
+              accessibilityHint="Opens vcloudmaster.com">
+              Vcloudmaster
+            </Text>
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -131,51 +157,60 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 16,
     backgroundColor: colors.accentTeal,
+    shadowColor: colors.accentTeal,
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.three,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '700',
+    ...typography.title,
     color: colors.textPrimary,
   },
   tagline: {
     marginTop: 4,
-    fontSize: 13,
+    ...typography.footnote,
     color: colors.textSecondary,
   },
   form: {
     gap: spacing.four,
+    padding: spacing.five,
+    borderRadius: 20,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
     color: colors.primary,
-    fontSize: 13,
-    fontWeight: '600',
+    ...typography.footnoteStrong,
   },
   signupRow: {
     textAlign: 'center',
     marginTop: spacing.two,
   },
   signupText: {
-    fontSize: 13,
+    ...typography.footnote,
     color: colors.textSecondary,
   },
   signupLink: {
-    fontSize: 13,
+    ...typography.footnoteStrong,
     color: colors.primary,
-    fontWeight: '600',
   },
   employeeHint: {
     textAlign: 'center',
-    fontSize: 12,
+    ...typography.caption,
     color: colors.textMuted,
   },
   footer: {
     textAlign: 'center',
-    fontSize: 12,
+    ...typography.caption,
     color: colors.textSecondary,
     marginBottom: spacing.four,
+  },
+  footerLink: {
+    fontWeight: '700',
+    color: colors.primary,
+    textDecorationLine: 'underline',
   },
 });

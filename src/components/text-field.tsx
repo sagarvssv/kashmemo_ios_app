@@ -2,7 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleProp, StyleSheet, Text, TextInput, TextInputProps, View, ViewStyle } from 'react-native';
 
-import { colors } from '@/constants/theme';
+import { type Palette, useColors, useThemedStyles } from '@/constants/brand';
+import { typography } from '@/constants/theme';
 
 type TextFieldProps = TextInputProps & {
   icon?: keyof typeof Ionicons.glyphMap;
@@ -21,6 +22,8 @@ export function TextField({
   multiline,
   ...textInputProps
 }: TextFieldProps) {
+  const styles = useThemedStyles(makeStyles);
+  const colors = useColors();
   const field = (
     <View style={[styles.container, multiline && styles.multilineContainer, !label && containerStyle]}>
       {icon && <Ionicons name={icon} size={18} color={colors.textSecondary} style={styles.leadingIcon} />}
@@ -48,13 +51,13 @@ export function TextField({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) =>
+  StyleSheet.create({
   labelled: {
     gap: 6,
   },
   label: {
-    fontSize: 13,
-    fontWeight: '600',
+    ...typography.footnoteStrong,
     color: colors.textPrimary,
   },
   container: {
@@ -79,7 +82,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: 15,
+    ...typography.input,
     color: colors.textPrimary,
   },
   multilineInput: {

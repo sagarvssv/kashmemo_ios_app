@@ -20,5 +20,12 @@ function resolveApiBaseUrl(): string {
 
 export const API_BASE_URL = resolveApiBaseUrl();
 
-export const CURRENCY = 'INR';
-export const LOCALE = 'en-IN';
+export const CURRENCY = 'AED';
+export const LOCALE = 'en-AE';
+
+// Petty-cash invoice service (OCR + AI categorization). The production URL will
+// differ, so it comes from EXPO_PUBLIC_INVOICE_API_URL; the dev URL is a fallback.
+// This API has no auth of its own - route it through our backend before release.
+export const INVOICE_API_URL = (
+  process.env.EXPO_PUBLIC_INVOICE_API_URL || 'https://pphuyyt3lb.execute-api.us-east-1.amazonaws.com/dev'
+).replace(/\/+$/, '');

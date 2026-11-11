@@ -1,4 +1,5 @@
 import { CURRENCY, LOCALE } from './config';
+import { getDisplayCurrency, type DisplayCurrency } from './currency';
 import type { Money, TicketStatus, UserRole } from './types';
 
 export function toAmount(value: Money | null | undefined): number {
@@ -6,14 +7,60 @@ export function toAmount(value: Money | null | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-const currencyFormatter = new Intl.NumberFormat(LOCALE, {
-  style: 'currency',
-  currency: CURRENCY,
-  maximumFractionDigits: 2,
-});
+// Whole amounts show no decimals (AED 5,000); others show two (AED 5,000.50).
+const formatters = new Map<string, { whole: Intl.NumberFormat; decimal: Intl.NumberFormat }>();
 
+function formattersFor(currency: string) {
+  let entry = formatters.get(currency);
+  if (!entry) {
+    const base = { style: 'currency' as const, currency };
+    entry = {
+      whole: new Intl.NumberFormat(LOCALE, { ...base, minimumFractionDigits: 0, maximumFractionDigits: 0 }),
+      decimal: new Intl.NumberFormat(LOCALE, { ...base, minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    };
+    formatters.set(currency, entry);
+  }
+  return entry;
+}
+
+function format(amount: number, currency: string) {
+  const { whole, decimal } = formattersFor(currency);
+  return (Number.isInteger(amount) ? whole : decimal).format(amount);
+}
+
+// A stored amount (always in CURRENCY), shown in the user's display currency.
+// In components use useMoney() instead, which updates when the currency changes.
 export function formatMoney(value: Money | null | undefined): string {
-  return currencyFormatter.format(toAmount(value));
+  return formatMoneyIn(value, getDisplayCurrency());
+}
+
+// formatMoney() for an explicit display currency. Components use it through
+// useMoney(), so the currency is a visible input and memoized output (the React
+// Compiler caches by inputs) is recomputed when it changes.
+export function formatMoneyIn(value: Money | null | undefined, { code, rate }: DisplayCurrency): string {
+  const amount = toAmount(value);
+  if (code === CURRENCY) return format(amount, CURRENCY);
+  return format(Math.round(amount * rate * 100) / 100, code);
+}
+
+// An amount in the stored currency, unconverted: for limits next to amount inputs,
+// which are always entered in CURRENCY.
+export function formatBaseMoney(value: Money | null | undefined): string {
+  return format(toAmount(value), CURRENCY);
+}
+
+// Amounts the server writes into activity and notification text ("₹5,000",
+// "Rs. 5000", "AED 1,250.50", "5000 INR"). They are stored-currency values, so
+// they're re-rendered in the display currency like every other amount.
+const MONEY_IN_TEXT =
+  /(?:₹|Rs\.?|INR|AED|د\.إ\.?)\s?(\d[\d,]*(?:\.\d+)?)|(\d[\d,]*(?:\.\d+)?)\s?(?:INR|AED)\b/g;
+
+export function localizeMoneyText(text: string, display: DisplayCurrency = getDisplayCurrency()): string {
+  if (!text) return text;
+  return text.replace(MONEY_IN_TEXT, (match, before: string | undefined, after: string | undefined) => {
+    const amount = Number((before ?? after ?? '').replace(/,/g, ''));
+    return Number.isFinite(amount) ? formatMoneyIn(amount, display) : match;
+  });
 }
 
 export function formatDate(value: string | null | undefined): string {
@@ -21,6 +68,17 @@ export function formatDate(value: string | null | undefined): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// "YYYY-MM-DD" calendar day, read as a local date so it never shifts a day.
+export function formatDay(day: string): string {
+  const [year, month, date] = day.split('-').map(Number);
+  if (!year || !month || !date) return day;
+  return new Date(year, month - 1, date).toLocaleDateString(LOCALE, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
 }
 
 export function formatDateTime(value: string | null | undefined): string {
@@ -73,6 +131,8 @@ export const STATUS_LABELS: Record<TicketStatus, string> = {
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
   DISBURSED: 'Disbursed',
+  SETTLEMENT_PENDING: 'Awaiting settlement',
+  SETTLED: 'Settled',
 };
 
 export function humanize(value: string): string {
@@ -91,3 +151,12 @@ export function initials(name: string): string {
     .map((part) => part.charAt(0).toUpperCase())
     .join('');
 }
+
+// Short, human-friendly reference for any UUID (tickets, people, departments),
+// e.g. "#3F9A1C2B". The full ID is shown on each detail screen.
+export function shortId(id: string | null | undefined): string {
+  if (!id) return '';
+  return `#${id.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+}
+
+export const ticketRef = shortId;

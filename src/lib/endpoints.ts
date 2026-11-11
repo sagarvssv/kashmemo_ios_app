@@ -1,6 +1,7 @@
 import { request } from './api';
 import type {
   Activity,
+  Advance,
   ApiEnvelope,
   AppNotification,
   BudgetStatus,
@@ -15,10 +16,15 @@ import type {
   IndustryType,
   LoginResult,
   ManagerDepartment,
+  MyBill,
+  OutstandingAdvance,
+  PendingBill,
+  RaisedInMonth,
   OrgBudget,
   Pagination,
   Profile,
   Ticket,
+  TicketBill,
   TicketStatus,
   UserRole,
   Wallet,
@@ -37,16 +43,24 @@ export const authApi = {
     country: string;
     email: string;
     password: string;
-  }) => request<ApiEnvelope<{ organizationId: string; userId: string; message: string }>>('/api/org/signup', {
-    method: 'POST',
-    body: input,
-    auth: false,
-  }),
+  }) =>
+    request<ApiEnvelope<{ organizationId: string; userId: string; message: string }>>('/api/org/signup', {
+      method: 'POST',
+      body: input,
+      auth: false,
+    }),
 
   verifyEmail: (email: string, otp: string) =>
     request<ApiEnvelope<{ message: string }>>('/api/org/verifyOtp', {
       method: 'POST',
       body: { email, otp },
+      auth: false,
+    }),
+
+  resendVerificationCode: (email: string) =>
+    request<ApiEnvelope<{ message: string }>>('/api/org/resend-verification-otp', {
+      method: 'POST',
+      body: { email },
       auth: false,
     }),
 
@@ -74,14 +88,25 @@ export const authApi = {
 
   profile: () => request<ApiEnvelope<Profile>>('/api/org/profile'),
 
+  // CEO only: emails a one-time code that must be confirmed to delete the organisation.
+  requestOrganizationDeletion: () =>
+    request<ApiEnvelope<{ message: string }>>('/api/org/get-otp-delete-org', { method: 'POST' }),
+
+  // CEO only: permanently deletes the organisation and everything in it.
+  confirmOrganizationDeletion: (otp: string) =>
+    request<ApiEnvelope<{ message: string }>>('/api/org/verify-otp-delete-org', { method: 'POST', body: { otp } }),
+
   health: () => request<string>('/api/health', { auth: false, responseType: 'text' }),
 };
 
 // ─── Tickets ───
 
 export const ticketApi = {
-  raise: (purpose: string, amount: number) =>
-    request<ApiEnvelope<Ticket>>('/api/emp/raise-ticket', { method: 'POST', body: { purpose, amount } }),
+  raise: (purpose: string, amount: number, category?: string) =>
+    request<ApiEnvelope<Ticket>>('/api/emp/raise-ticket', {
+      method: 'POST',
+      body: category ? { purpose, amount, category } : { purpose, amount },
+    }),
 
   mine: (query: CursorQuery & { status?: TicketStatus }) =>
     request<CursorPage<Ticket>>('/api/emp/my-tickets-list', { query }),
@@ -89,7 +114,7 @@ export const ticketApi = {
   department: (query: CursorQuery & { status?: TicketStatus; departmentId?: string }) =>
     request<CursorPage<Ticket>>('/api/mang/ticket/list', { query }),
 
-  organization: (query: CursorQuery & { status?: TicketStatus }) =>
+  organization: (query: CursorQuery & { status?: TicketStatus; departmentId?: string }) =>
     request<CursorPage<Ticket>>('/api/org/ticket/list-tickets', { query }),
 
   byId: (ticketId: string) => request<ApiEnvelope<Ticket>>(`/api/org/ticket/${ticketId}`),
@@ -110,16 +135,77 @@ export const ticketApi = {
     }),
 
   wallet: () => request<ApiEnvelope<Wallet>>('/api/emp/my-wallet'),
+
+  // Submit a confirmed scanned receipt for approval: creates a PENDING receipt
+  // ticket whose amount the server takes from the invoice.
+  fromInvoice: (invoiceId: string) =>
+    request<ApiEnvelope<Ticket>>('/api/emp/tickets/from-invoice', { method: 'POST', body: { invoiceId } }),
+
+  // How many tickets the signed-in employee raised in a month, and their total.
+  // Month boundaries are midnight in the server's business time zone.
+  raisedInMonth: (query: MonthQuery = {}) =>
+    request<ApiEnvelope<RaisedInMonth>>('/api/emp/my-tickets-this-month', { query }),
+};
+
+// ─── Advances: bills, wallet and settlement ───
+
+// The same advance-details route exists under each role's prefix.
+function advancePrefix(role: UserRole) {
+  if (role === 'EMPLOYEE') return '/api/emp';
+  if (role === 'MANAGER') return '/api/mang';
+  return '/api/org';
+}
+
+export const advanceApi = {
+  details: (ticketId: string, role: UserRole) =>
+    request<ApiEnvelope<Advance>>(`${advancePrefix(role)}/advances/${ticketId}`),
+
+  // Attach a confirmed scanned receipt to an advance whose cash was collected.
+  addBill: (ticketId: string, invoiceId: string) =>
+    request<ApiEnvelope<TicketBill>>(`/api/emp/advances/${ticketId}/bills`, { method: 'POST', body: { invoiceId } }),
+
+  // Take back a bill the employee added (only while PENDING or REJECTED). Frees its receipt.
+  removeBill: (ticketId: string, billId: string) =>
+    request<ApiEnvelope<{ id: string; ticketId: string; invoiceId: string }>>(
+      `/api/emp/advances/${ticketId}/bills/${billId}`,
+      { method: 'DELETE' },
+    ),
+
+  // The employee is done spending; finance settles the difference.
+  submitSettlement: (ticketId: string) =>
+    request<ApiEnvelope<{ ticket: Ticket; balance: number }>>(`/api/emp/advances/${ticketId}/submit-settlement`, {
+      method: 'POST',
+    }),
+
+  myBills: () => request<ApiEnvelope<MyBill[]>>('/api/emp/my-bills'),
+
+  pendingBills: () => request<ApiEnvelope<PendingBill[]>>('/api/mang/bills/pending'),
+
+  approveBill: (billId: string) =>
+    request<ApiEnvelope<Ticket>>(`/api/mang/bills/approve/${billId}`, { method: 'PATCH' }),
+
+  rejectBill: (billId: string, reason: string) =>
+    request<ApiEnvelope<TicketBill>>(`/api/mang/bills/reject/${billId}`, { method: 'PATCH', body: { reason } }),
+
+  outstanding: () => request<ApiEnvelope<OutstandingAdvance[]>>('/api/org/advances/outstanding'),
+
+  settle: (ticketId: string) =>
+    request<ApiEnvelope<Ticket>>(`/api/org/advances/${ticketId}/settle`, { method: 'PATCH' }),
 };
 
 // ─── Employees ───
 
 export const employeeApi = {
-  list: (query: { page?: number; limit?: number; search?: string; role?: UserRole; designation?: string }) =>
-    request<ApiEnvelope<Employee[]> & { pagination: Pagination }>('/api/org/list-employees', { query }),
+  list: (query: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    role?: UserRole;
+    designation?: string;
+    departmentId?: string;
+  }) => request<ApiEnvelope<Employee[]> & { pagination: Pagination }>('/api/org/list-employees', { query }),
 
-  allInOrganization: (query: CursorQuery) =>
-    request<CursorPage<Employee>>('/api/org/get-org-all-employees', { query }),
+  allInOrganization: (query: CursorQuery) => request<CursorPage<Employee>>('/api/org/get-org-all-employees', { query }),
 
   inDepartment: (departmentId?: string) =>
     request<ApiEnvelope<Employee[]>>('/api/mang/employees/list', { query: { departmentId } }),
@@ -185,9 +271,11 @@ export const departmentApi = {
 
 export const managerApi = {
   // Managers always get their own list; the CEO passes any manager's id.
-  // (/api/mang/departments/list is not used: it reads a :managerId param its route doesn't declare.)
   departments: (managerId: string) =>
     request<ApiEnvelope<ManagerDepartment[]>>(`/api/org/managers/${managerId}/departments`),
+
+  // The signed-in manager's own departments.
+  myDepartments: () => request<ApiEnvelope<ManagerDepartment[]>>('/api/mang/departments/list'),
 
   setPrimaryDepartment: (managerId: string, departmentId: string) =>
     request<ApiEnvelope<Employee>>(`/api/org/managers/${managerId}/primary-department`, {
@@ -249,5 +337,6 @@ export const notificationApi = {
   markRead: (notificationId: string) =>
     request<ApiEnvelope<AppNotification>>(`/api/org/notifications/mark-read/${notificationId}`, { method: 'PATCH' }),
 
-  markAllRead: () => request<ApiEnvelope<{ count: number }>>('/api/org/notifications/mark-all-read', { method: 'PATCH' }),
+  markAllRead: () =>
+    request<ApiEnvelope<{ count: number }>>('/api/org/notifications/mark-all-read', { method: 'PATCH' }),
 };

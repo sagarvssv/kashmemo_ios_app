@@ -1,18 +1,20 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet } from 'react-native';
 
+import { AuthHero } from '@/components/auth-hero';
+import { Card } from '@/components/card';
 import { PrimaryButton } from '@/components/primary-button';
+import { Screen } from '@/components/screen';
 import { InlineError } from '@/components/states';
 import { TextField } from '@/components/text-field';
-import { colors, spacing } from '@/constants/theme';
+import { type Palette, useThemedStyles } from '@/constants/brand';
+import { typography } from '@/constants/theme';
 import { errorMessage } from '@/lib/api';
 import { authApi } from '@/lib/endpoints';
-import { goBackOrReplace } from '@/utils/navigation';
 
 export default function ForgotPasswordScreen() {
+  const styles = useThemedStyles(makeStyles);
   const params = useLocalSearchParams<{ email?: string }>();
   const [email, setEmail] = useState(params.email ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -40,82 +42,43 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <View style={styles.headerRow}>
-        <Pressable onPress={() => goBackOrReplace('/login')} hitSlop={8}>
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Forgot Password</Text>
-      </View>
+    <Screen title="Forgot password" backFallback="/login">
+      <AuthHero
+        icon="key-outline"
+        title="Reset your password"
+        description="Enter your email and we'll send you a 6-digit code to set a new password."
+        step={{ current: 1, total: 3 }}
+      />
 
-      <View style={styles.body}>
-        <Text style={styles.heading}>Reset Your Password</Text>
-        <Text style={styles.description}>
-          Enter your email address and we&apos;ll send you a 6-digit OTP to reset your password.
-        </Text>
-
+      <Card>
         <TextField
+          label="Email address"
           icon="mail-outline"
-          placeholder="Email address"
+          placeholder="you@company.com"
           autoCapitalize="none"
+          autoComplete="email"
           keyboardType="email-address"
+          returnKeyType="send"
+          onSubmitEditing={handleSendOtp}
           value={email}
           onChangeText={setEmail}
-          containerStyle={styles.field}
         />
-
         <InlineError message={error} />
+        <PrimaryButton label="Send code" icon="paper-plane-outline" onPress={handleSendOtp} disabled={!canSubmit} loading={isSending} />
+      </Card>
 
-        <PrimaryButton label="Send OTP" onPress={handleSendOtp} disabled={!canSubmit} loading={isSending} />
-
-        <Link href="/login" style={styles.backLink}>
-          Back to login
-        </Link>
-      </View>
-    </SafeAreaView>
+      <Link href="/login" style={styles.backLink}>
+        Back to login
+      </Link>
+    </Screen>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.four,
-    paddingTop: spacing.three,
-    gap: spacing.three,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  body: {
-    paddingHorizontal: spacing.six,
-    marginTop: spacing.eight,
-    gap: spacing.four,
-  },
-  heading: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  description: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: spacing.two,
-  },
-  field: {
-    marginBottom: spacing.two,
-  },
+const makeStyles = (colors: Palette) =>
+  StyleSheet.create({
   backLink: {
+    ...typography.footnoteStrong,
     alignSelf: 'center',
     color: colors.primary,
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: spacing.two,
   },
 });

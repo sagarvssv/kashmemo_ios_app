@@ -1,37 +1,42 @@
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { Card, Section } from '@/components/card';
 import { currentMonth, MonthSwitcher } from '@/components/month-switcher';
 import { Screen } from '@/components/screen';
 import { StatGrid, StatTile } from '@/components/stat-tile';
 import { ErrorState, LoadingState } from '@/components/states';
-import { StatusBadge } from '@/components/status-badge';
-import { colors, spacing } from '@/constants/theme';
+import { StatusBreakdown } from '@/components/status-breakdown';
+import { useColors } from '@/constants/brand';
+import { spacing } from '@/constants/theme';
 import { useCurrentUser, useRealtime } from '@/context/session';
+import { AdvanceShortcuts } from '@/features/advances/components';
 import { useApi } from '@/hooks/use-api';
 import { dashboardApi, ticketApi } from '@/lib/endpoints';
-import { formatMoney } from '@/lib/format';
 import { can } from '@/lib/permissions';
-import type { TicketStatus } from '@/lib/types';
+import { useMoney } from '@/lib/use-money';
 
 import {
-  BudgetCard,
+  DailyReportShortcut,
+  DepartmentBudgetRow,
+  DepartmentTicketsPreview,
   greetingSubtitle,
   greetingTitle,
-  NotificationBell,
+  ProfileButton,
   RaiseTicketButton,
   RecentActivityPreview,
   TicketPreviewList,
 } from './shared';
 
-const SUMMARY_STATUSES: TicketStatus[] = ['PENDING', 'PARTIALLY_APPROVED', 'APPROVED', 'DISBURSED', 'REJECTED'];
-
 // Dashboard for the CEO and HR, built on /dashboard/summary.
 export function OrgDashboard() {
+  const colors = useColors();
+  const accents = colors.accents;
+  const formatMoney = useMoney();
   const user = useCurrentUser();
   const [month, setMonth] = useState(currentMonth);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   const summary = useApi(() => dashboardApi.summary(month), [month]);
   const pending = useApi(
@@ -50,6 +55,7 @@ export function OrgDashboard() {
   });
 
   const refresh = async () => {
+    setRefreshToken((token) => token + 1);
     await Promise.all([summary.refresh(), pending.refresh(), toDisburse.refresh()]);
   };
 
@@ -59,12 +65,12 @@ export function OrgDashboard() {
     <Screen
       title={greetingTitle(user)}
       subtitle={greetingSubtitle(user)}
-      right={<NotificationBell />}
+      right={<ProfileButton />}
       refreshing={summary.isRefreshing}
       onRefresh={refresh}>
       <MonthSwitcher value={month} onChange={setMonth} />
 
-      {summary.isLoading && !data ? <LoadingState /> : null}
+      {summary.isLoading && !data ? <LoadingState variant="dashboard" /> : null}
       {summary.error && !data ? <ErrorState message={summary.error} onRetry={summary.reload} /> : null}
 
       {data && (
@@ -76,29 +82,49 @@ export function OrgDashboard() {
               icon="wallet-outline"
               tone="highlight"
             />
-            <StatTile label="Spent" value={formatMoney(data.budget.totalSpent)} icon="trending-up-outline" />
-            <StatTile label="Allocated" value={formatMoney(data.budget.totalAllocatedBudget)} icon="pie-chart-outline" />
-            <StatTile label="Employees" value={String(data.totalEmployees)} icon="people-outline" />
+            <StatTile label="Spent" value={formatMoney(data.budget.totalSpent)} icon="trending-up-outline" tint={accents.blue} />
+            <StatTile
+              label="Allocated"
+              value={formatMoney(data.budget.totalAllocatedBudget)}
+              icon="pie-chart-outline"
+              tint={accents.green}
+            />
+            <StatTile label="Employees" value={String(data.totalEmployees)} icon="people-outline" tint={accents.violet} />
           </StatGrid>
 
           <Section title="Tickets this month">
             <Card>
-              {SUMMARY_STATUSES.map((status) => (
-                <View key={status} style={styles.statusRow}>
-                  <StatusBadge status={status} />
-                  <Text style={styles.statusCount}>{data.tickets[status] ?? 0}</Text>
-                </View>
-              ))}
+              <StatusBreakdown
+                counts={data.tickets}
+                onOpenStatus={(status) => router.push({ pathname: '/tickets', params: { scope: 'all', status } })}
+              />
             </Card>
           </Section>
+
+          {data.departments.length > 0 && (
+            <Section title={`Departments (${data.totalDepartments})`} action={{ label: 'Manage', onPress: () => router.push('/departments') }}>
+              <Card style={styles.departments}>
+                {data.departments.map((status, index) => (
+                  <DepartmentBudgetRow key={status.departmentId.id} status={status} first={index === 0} />
+                ))}
+              </Card>
+            </Section>
+          )}
         </>
       )}
+
+      <DailyReportShortcut />
+
+      <AdvanceShortcuts />
+
+      <DepartmentTicketsPreview refreshToken={refreshToken} />
 
       <RaiseTicketButton />
 
       <TicketPreviewList
         title="Pending approval"
         tickets={pending.data}
+        loading={pending.isLoading}
         emptyTitle={pending.error ?? 'Nothing waiting for approval'}
         onSeeAll={() => router.push({ pathname: '/tickets', params: { scope: 'all', status: 'PENDING' } })}
       />
@@ -106,21 +132,10 @@ export function OrgDashboard() {
       <TicketPreviewList
         title="Approved · ready to disburse"
         tickets={toDisburse.data?.data}
+        loading={toDisburse.isLoading}
         emptyTitle={toDisburse.error ?? 'No approved tickets awaiting payout'}
         onSeeAll={() => router.push({ pathname: '/tickets', params: { scope: 'all', status: 'APPROVED' } })}
       />
-
-      {data && data.departments.length > 0 && (
-        <Section title={`Departments (${data.totalDepartments})`} action={{ label: 'Manage', onPress: () => router.push('/departments') }}>
-          {data.departments.map((status) => (
-            <BudgetCard
-              key={status.departmentId.id}
-              status={status}
-              onPress={() => router.push({ pathname: '/department/[id]', params: { id: status.departmentId.id } })}
-            />
-          ))}
-        </Section>
-      )}
 
       <RecentActivityPreview />
     </Screen>
@@ -128,15 +143,8 @@ export function OrgDashboard() {
 }
 
 const styles = StyleSheet.create({
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  departments: {
+    gap: 0,
     paddingVertical: spacing.one,
-  },
-  statusCount: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary,
   },
 });

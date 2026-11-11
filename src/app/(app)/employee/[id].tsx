@@ -2,25 +2,28 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, Linking, StyleSheet, Text, View } from 'react-native';
 
-import { Card, Divider, KeyValue, ListRow, Section } from '@/components/card';
-import { PromptModal } from '@/components/prompt-modal';
+import { Card, Divider, IdValue, KeyValue, ListRow, Section } from '@/components/card';
 import { Screen } from '@/components/screen';
 import { SelectField } from '@/components/select-field';
 import { ErrorState, InlineError, LoadingState } from '@/components/states';
 import { Tag } from '@/components/status-badge';
-import { colors, spacing } from '@/constants/theme';
+import { useToast } from '@/components/toast';
+import { type Palette, useBrand, useThemedStyles } from '@/constants/brand';
+import { spacing, typography } from '@/constants/theme';
 import { useCurrentUser } from '@/context/session';
 import { useApi } from '@/hooks/use-api';
 import { errorMessage } from '@/lib/api';
 import { employeeApi } from '@/lib/endpoints';
-import { initials, ROLE_LABELS } from '@/lib/format';
+import { initials, ROLE_LABELS, shortId } from '@/lib/format';
 import { can } from '@/lib/permissions';
 import { USER_ROLES, type UserRole } from '@/lib/types';
 
 export default function EmployeeDetailScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const brand = useBrand();
   const { id } = useLocalSearchParams<{ id: string }>();
   const user = useCurrentUser();
-  const [isEditing, setIsEditing] = useState(false);
+  const toast = useToast();
   const [actionError, setActionError] = useState<string | null>(null);
 
   const employee = useApi(() => employeeApi.details(id).then((r) => r.data), [id]);
@@ -28,7 +31,7 @@ export default function EmployeeDetailScreen() {
   if (employee.isLoading && !employee.data) {
     return (
       <Screen title="Employee" backFallback="/people">
-        <LoadingState />
+        <LoadingState variant="detail" />
       </Screen>
     );
   }
@@ -60,6 +63,7 @@ export default function EmployeeDetailScreen() {
           try {
             await employeeApi.changeRole(data.id, role);
             await employee.reload();
+            toast.show({ title: 'Role updated', message: `${data.name} is now a ${ROLE_LABELS[role]}.` });
           } catch (err) {
             setActionError(errorMessage(err));
           }
@@ -82,6 +86,7 @@ export default function EmployeeDetailScreen() {
             } else {
               await employeeApi.removeAsManager(data.id);
             }
+            toast.show({ title: 'Employee removed', message: `${data.name} no longer has access.` });
             router.back();
           } catch (err) {
             setActionError(errorMessage(err));
@@ -94,12 +99,13 @@ export default function EmployeeDetailScreen() {
   return (
     <Screen title={data.name} backFallback="/people" refreshing={employee.isRefreshing} onRefresh={employee.refresh}>
       <Card style={styles.hero}>
-        <View style={styles.avatar}>
+        <View style={[styles.avatar, { backgroundColor: brand.secondary }]}>
           <Text style={styles.avatarText}>{initials(data.name)}</Text>
         </View>
         <Text style={styles.name}>{data.name}</Text>
         {data.designation ? <Text style={styles.designation}>{data.designation}</Text> : null}
         <Tag label={ROLE_LABELS[data.role]} />
+        <Text style={styles.ref}>{shortId(data.id)}</Text>
       </Card>
 
       <Section title="Contact">
@@ -124,9 +130,26 @@ export default function EmployeeDetailScreen() {
 
       <Section title="Work">
         <Card>
-          <KeyValue label="Department" value={data.department?.name ?? 'Not assigned'} />
+          <KeyValue icon="id-card-outline" label={data.role === 'MANAGER' ? 'Manager ID' : 'Employee ID'} value={<IdValue id={data.id} />} />
           <Divider />
-          <KeyValue label="Organisation" value={data.organization.companyName} />
+          {data.department && can.viewDepartments(user.role) ? (
+            <ListRow
+              icon="business-outline"
+              title={data.department.name}
+              subtitle={`Department ${shortId(data.department.id)}`}
+              onPress={() => router.push({ pathname: '/department/[id]', params: { id: data.department!.id } })}
+            />
+          ) : (
+            <KeyValue icon="business-outline" label="Department" value={data.department?.name ?? 'Not assigned'} />
+          )}
+          {data.department ? (
+            <>
+              <Divider />
+              <KeyValue icon="finger-print-outline" label="Department ID" value={<IdValue id={data.department.id} />} />
+            </>
+          ) : null}
+          <Divider />
+          <KeyValue icon="briefcase-outline" label="Organisation" value={data.organization.companyName} />
         </Card>
       </Section>
 
@@ -156,7 +179,11 @@ export default function EmployeeDetailScreen() {
                 />
               )}
               {managerCanEdit && (
-                <ListRow icon="create-outline" title="Edit details" onPress={() => setIsEditing(true)} />
+                <ListRow
+                  icon="create-outline"
+                  title="Edit details"
+                  onPress={() => router.push({ pathname: '/edit-employee/[id]', params: { id: data.id } })}
+                />
               )}
               {canDelete && (
                 <ListRow icon="trash-outline" title="Remove employee" destructive onPress={confirmDelete} />
@@ -166,32 +193,12 @@ export default function EmployeeDetailScreen() {
         </Section>
       )}
 
-      <PromptModal
-        visible={isEditing}
-        title="Edit details"
-        fields={[
-          { key: 'name', label: 'Name', initialValue: data.name },
-          { key: 'designation', label: 'Designation', initialValue: data.designation ?? '' },
-          {
-            key: 'phoneNumber',
-            label: 'Phone number',
-            initialValue: data.phoneNumber ?? '',
-            keyboardType: 'phone-pad',
-            optional: true,
-          },
-        ]}
-        confirmLabel="Save"
-        onClose={() => setIsEditing(false)}
-        onSubmit={async (values) => {
-          await employeeApi.editAsManager(data.id, values);
-          await employee.reload();
-        }}
-      />
     </Screen>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) =>
+  StyleSheet.create({
   hero: {
     alignItems: 'center',
     gap: spacing.two,
@@ -206,16 +213,18 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '700',
+    ...typography.title,
   },
   name: {
-    fontSize: 20,
-    fontWeight: '700',
+    ...typography.title,
     color: colors.textPrimary,
   },
   designation: {
-    fontSize: 14,
+    ...typography.callout,
+    color: colors.textMuted,
+  },
+  ref: {
+    ...typography.caption,
     color: colors.textMuted,
   },
   actionsCard: {

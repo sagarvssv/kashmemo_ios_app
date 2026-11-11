@@ -1,23 +1,27 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { ChipGroup } from '@/components/chip-group';
-import { Screen } from '@/components/screen';
+import { HeaderIconButton, Screen } from '@/components/screen';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Tag } from '@/components/status-badge';
 import { TextField } from '@/components/text-field';
-import { colors, radius, spacing } from '@/constants/theme';
+import { GlassSurface } from '@/components/glass';
+import { FadeInItem, PressableScale } from '@/components/motion';
+import { type Palette, useBrand, useColors, useThemedStyles } from '@/constants/brand';
+import { radius, spacing, typography, TAB_BAR_CLEARANCE } from '@/constants/theme';
 import { useCurrentUser, useRealtime } from '@/context/session';
 import { useApi } from '@/hooks/use-api';
 import { errorMessage } from '@/lib/api';
-import { employeeApi, managerApi } from '@/lib/endpoints';
-import { initials, ROLE_LABELS } from '@/lib/format';
+import { departmentVisual } from '@/lib/department-icons';
+import { departmentApi, employeeApi, managerApi } from '@/lib/endpoints';
+import { initials, ROLE_LABELS, shortId } from '@/lib/format';
 import { can } from '@/lib/permissions';
-import { USER_ROLES, type Employee, type UserRole } from '@/lib/types';
+import type { Employee } from '@/lib/types';
 
 export default function PeopleScreen() {
+  const styles = useThemedStyles(makeStyles);
   const user = useCurrentUser();
   const isManager = user.role === 'MANAGER';
 
@@ -28,24 +32,30 @@ export default function PeopleScreen() {
       right={
         <View style={styles.headerActions}>
           {can.uploadCsv(user.role) && (
-            <Pressable onPress={() => router.push('/upload-csv')} hitSlop={8} accessibilityLabel="Upload CSV">
-              <Ionicons name="cloud-upload-outline" size={26} color={colors.primary} />
-            </Pressable>
+            <HeaderIconButton
+              icon="cloud-upload-outline"
+              onPress={() => router.push('/upload-csv')}
+              accessibilityLabel="Upload CSV"
+            />
           )}
           {can.addEmployee(user.role) && (
-            <Pressable onPress={() => router.push('/add-employee')} hitSlop={8} accessibilityLabel="Add employee">
-              <Ionicons name="person-add" size={24} color={colors.primary} />
-            </Pressable>
+            <HeaderIconButton
+              icon="person-add-outline"
+              onPress={() => router.push('/add-employee')}
+              accessibilityLabel="Add employee"
+            />
           )}
         </View>
       }>
-      {isManager ? <DepartmentPeople managerId={user.userId} /> : <OrganizationPeople />}
+      {isManager ? <DepartmentPeople /> : <OrganizationPeople />}
     </Screen>
   );
 }
 
-function DepartmentPeople({ managerId }: { managerId: string }) {
-  const departments = useApi(() => managerApi.departments(managerId), [managerId]);
+function DepartmentPeople() {
+  const palette = useColors();
+  const styles = useThemedStyles(makeStyles);
+  const departments = useApi(() => managerApi.myDepartments(), []);
   const [departmentId, setDepartmentId] = useState<string | null>(null);
 
   const list = departments.data?.data ?? [];
@@ -60,7 +70,7 @@ function DepartmentPeople({ managerId }: { managerId: string }) {
     void employees.reload();
   });
 
-  if (departments.isLoading && !departments.data) return <LoadingState />;
+  if (departments.isLoading && !departments.data) return <LoadingState padded />;
   if (departments.error && !departments.data) {
     return <ErrorState message={departments.error} onRetry={departments.reload} />;
   }
@@ -73,7 +83,9 @@ function DepartmentPeople({ managerId }: { managerId: string }) {
             options={list.map((department) => ({
               value: department.id,
               label: department.isPrimary ? `${department.name} (primary)` : department.name,
+              ...departmentVisual(department.name, palette.departmentTints),
             }))}
+            compact
             value={selectedId ?? ''}
             onChange={setDepartmentId}
           />
@@ -91,17 +103,29 @@ function DepartmentPeople({ managerId }: { managerId: string }) {
   );
 }
 
-type RoleFilter = UserRole | 'ALL';
-const ROLE_FILTERS: { value: RoleFilter; label: string }[] = [
-  { value: 'ALL', label: 'Everyone' },
-  ...USER_ROLES.filter((role) => role !== 'CEO').map((role) => ({ value: role, label: ROLE_LABELS[role] })),
-];
+const ALL_DEPARTMENTS = 'ALL';
 const PAGE_SIZE = 20;
+// Page size and page cap used when collecting a whole department client-side.
+const FILTER_PAGE_SIZE = 100;
+const MAX_FILTER_PAGES = 20;
 
 function OrganizationPeople() {
+  const palette = useColors();
+  const styles = useThemedStyles(makeStyles);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [role, setRole] = useState<RoleFilter>('ALL');
+  const [departmentId, setDepartmentId] = useState(ALL_DEPARTMENTS);
+  const departments = useApi(() => departmentApi.list(), []);
+  const departmentList = departments.data?.data ?? [];
+  const departmentOptions = [
+    { value: ALL_DEPARTMENTS, label: 'Everyone', icon: 'grid' as const },
+    ...departmentList.map((department) => ({
+      value: department.id,
+      label: department.name,
+      ...departmentVisual(department.name, palette.departmentTints),
+    })),
+  ];
+  const departmentName = departmentList.find((department) => department.id === departmentId)?.name;
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -112,7 +136,7 @@ function OrganizationPeople() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const query = `${debouncedSearch}|${role}`;
+  const query = `${debouncedSearch}|${departmentId}`;
   const isLoading = settledQuery !== query;
 
   useEffect(() => {
@@ -121,14 +145,36 @@ function OrganizationPeople() {
   }, [search]);
 
   const fetchPage = useCallback(
-    (nextPage: number) =>
-      employeeApi.list({
-        page: nextPage,
-        limit: PAGE_SIZE,
-        search: debouncedSearch || undefined,
-        role: role === 'ALL' ? undefined : role,
-      }),
-    [debouncedSearch, role],
+    async (nextPage: number) => {
+      if (departmentId === ALL_DEPARTMENTS) {
+        return employeeApi.list({ page: nextPage, limit: PAGE_SIZE, search: debouncedSearch || undefined });
+      }
+
+      // The employee list can't filter by department server-side, so collect the
+      // organisation's employees and keep this department's as a single page.
+      const matches: Employee[] = [];
+      for (let current = 1; current <= MAX_FILTER_PAGES; current++) {
+        const response = await employeeApi.list({
+          page: current,
+          limit: FILTER_PAGE_SIZE,
+          search: debouncedSearch || undefined,
+          departmentId,
+        });
+        matches.push(
+          ...response.data.filter((employee) =>
+            employee.department?.id
+              ? employee.department.id === departmentId
+              : employee.department?.name === departmentName,
+          ),
+        );
+        if (current >= response.pagination.totalPages) break;
+      }
+      return {
+        data: matches,
+        pagination: { page: 1, limit: matches.length, total: matches.length, totalPages: 1 },
+      };
+    },
+    [debouncedSearch, departmentId, departmentName],
   );
 
   const applyPage = useCallback((response: Awaited<ReturnType<typeof employeeApi.list>>) => {
@@ -190,7 +236,7 @@ function OrganizationPeople() {
           onChangeText={setSearch}
           returnKeyType="search"
         />
-        <ChipGroup options={ROLE_FILTERS} value={role} onChange={setRole} />
+        <ChipGroup compact options={departmentOptions} value={departmentId} onChange={setDepartmentId} />
         {!isLoading && <Text style={styles.count}>{total} people</Text>}
       </View>
       <PeopleList
@@ -228,7 +274,8 @@ function PeopleList({
   onEndReached,
   isLoadingMore,
 }: PeopleListProps) {
-  if (isLoading && employees.length === 0) return <LoadingState />;
+  const styles = useThemedStyles(makeStyles);
+  if (isLoading && employees.length === 0) return <LoadingState padded />;
   if (error && employees.length === 0) return <ErrorState message={error} onRetry={onRetry} />;
 
   return (
@@ -241,18 +288,20 @@ function PeopleList({
       onEndReached={onEndReached}
       onEndReachedThreshold={0.4}
       ListEmptyComponent={<EmptyState icon="people-outline" title="No people found" />}
-      ListFooterComponent={isLoadingMore ? <ActivityIndicator style={styles.footer} /> : null}
-      renderItem={({ item }) => <PersonRow employee={item} />}
+      ListFooterComponent={isLoadingMore ? <ActivityIndicator style={styles.footer} /> : undefined}
+      renderItem={({ item, index }) => <PersonRow employee={item} index={index} />}
     />
   );
 }
 
-function PersonRow({ employee }: { employee: Employee }) {
+function PersonRow({ employee, index }: { employee: Employee; index: number }) {
+  const styles = useThemedStyles(makeStyles);
+  const brand = useBrand();
   return (
-    <Pressable
-      onPress={() => router.push({ pathname: '/employee/[id]', params: { id: employee.id } })}
-      style={({ pressed }) => [styles.person, pressed && { opacity: 0.7 }]}>
-      <View style={styles.avatar}>
+    <FadeInItem index={index}>
+    <PressableScale onPress={() => router.push({ pathname: '/employee/[id]', params: { id: employee.id } })}>
+    <GlassSurface style={styles.person}>
+      <View style={[styles.avatar, { backgroundColor: brand.secondary }]}>
         <Text style={styles.avatarText}>{initials(employee.name)}</Text>
       </View>
       <View style={styles.personText}>
@@ -260,19 +309,22 @@ function PersonRow({ employee }: { employee: Employee }) {
           {employee.name}
         </Text>
         <Text style={styles.personMeta} numberOfLines={1}>
-          {[employee.designation, employee.department?.name].filter(Boolean).join(' · ') || employee.email}
+          {[shortId(employee.id), employee.designation, employee.department?.name].filter(Boolean).join(' · ')}
         </Text>
       </View>
       <Tag label={ROLE_LABELS[employee.role]} />
-    </Pressable>
+    </GlassSurface>
+    </PressableScale>
+    </FadeInItem>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) =>
+  StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.four,
+    gap: spacing.two,
   },
   filters: {
     paddingHorizontal: spacing.four,
@@ -280,12 +332,12 @@ const styles = StyleSheet.create({
     gap: spacing.three,
   },
   count: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.textMuted,
   },
   list: {
     paddingHorizontal: spacing.four,
-    paddingBottom: spacing.eight,
+    paddingBottom: TAB_BAR_CLEARANCE,
   },
   separator: {
     height: spacing.two,
@@ -297,11 +349,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.three,
-    backgroundColor: colors.surface,
     borderRadius: radius.medium,
     padding: spacing.three,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
   },
   avatar: {
     width: 40,
@@ -320,12 +369,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   personName: {
-    fontSize: 15,
-    fontWeight: '600',
+    ...typography.bodyStrong,
     color: colors.textPrimary,
   },
   personMeta: {
-    fontSize: 13,
+    ...typography.footnote,
     color: colors.textMuted,
   },
 });

@@ -1,9 +1,17 @@
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { colors, spacing } from '@/constants/theme';
+import { type Palette, useBrand, useThemedStyles } from '@/constants/brand';
+import { iconBadge, spacing, typography } from '@/constants/theme';
 
-type Option<T extends string> = { value: T; label: string };
+type Option<T extends string> = {
+  value: T;
+  label: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  // Accent for the icon badge; defaults to the primary color.
+  tint?: string;
+};
 
 type ChipGroupProps<T extends string> = {
   options: Option<T>[];
@@ -11,9 +19,13 @@ type ChipGroupProps<T extends string> = {
   onChange: (value: T) => void;
   // Wraps onto multiple lines instead of scrolling horizontally.
   wrap?: boolean;
+  // Smaller chips with smaller labels, for dense filter rows.
+  compact?: boolean;
 };
 
-export function ChipGroup<T extends string>({ options, value, onChange, wrap }: ChipGroupProps<T>) {
+export function ChipGroup<T extends string>({ options, value, onChange, wrap, compact }: ChipGroupProps<T>) {
+  const styles = useThemedStyles(makeStyles);
+  const brand = useBrand();
   const chips = options.map((option) => {
     const selected = option.value === value;
     return (
@@ -22,8 +34,25 @@ export function ChipGroup<T extends string>({ options, value, onChange, wrap }: 
         onPress={() => onChange(option.value)}
         accessibilityRole="button"
         accessibilityState={{ selected }}
-        style={[styles.chip, selected && styles.chipSelected]}>
-        <Text style={[styles.label, selected && styles.labelSelected]}>{option.label}</Text>
+        style={[
+          styles.chip,
+          compact && styles.chipCompact,
+          option.icon && styles.chipWithIcon,
+          selected && { backgroundColor: brand.primary, borderColor: brand.primary },
+        ]}>
+        {option.icon ? (
+          <View
+            style={[
+              styles.iconBadge,
+              compact && styles.iconBadgeCompact,
+              { backgroundColor: selected ? '#FFFFFF' : iconBadge(option.tint ?? brand.primary) },
+            ]}>
+            <Ionicons name={option.icon} size={compact ? 12 : 14} color={option.tint ?? brand.primary} />
+          </View>
+        ) : null}
+        <Text style={[styles.label, compact && styles.labelCompact, selected && styles.labelSelected]}>
+          {option.label}
+        </Text>
       </Pressable>
     );
   });
@@ -39,6 +68,8 @@ export function ChipGroup<T extends string>({ options, value, onChange, wrap }: 
 
 // A full-width segmented control for 2–3 mutually exclusive views.
 export function Segmented<T extends string>({ options, value, onChange }: ChipGroupProps<T>) {
+  const styles = useThemedStyles(makeStyles);
+  const brand = useBrand();
   return (
     <View style={styles.segmented}>
       {options.map((option) => {
@@ -49,7 +80,10 @@ export function Segmented<T extends string>({ options, value, onChange }: ChipGr
             onPress={() => onChange(option.value)}
             accessibilityRole="button"
             accessibilityState={{ selected }}
-            style={[styles.segment, selected && styles.segmentSelected]}>
+            style={[styles.segment, selected && { backgroundColor: brand.primary }]}>
+            {option.icon ? (
+              <Ionicons name={option.icon} size={14} color={selected ? '#FFFFFF' : (option.tint ?? brand.primary)} />
+            ) : null}
             <Text style={[styles.segmentLabel, selected && styles.segmentLabelSelected]}>{option.label}</Text>
           </Pressable>
         );
@@ -58,7 +92,8 @@ export function Segmented<T extends string>({ options, value, onChange }: ChipGr
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) =>
+  StyleSheet.create({
   row: {
     gap: spacing.two,
   },
@@ -68,6 +103,9 @@ const styles = StyleSheet.create({
     gap: spacing.two,
   },
   chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
@@ -75,14 +113,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderLight,
   },
-  chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+  chipCompact: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  chipWithIcon: {
+    paddingLeft: 5,
+  },
+  iconBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconBadgeCompact: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
   },
   label: {
-    fontSize: 13,
-    fontWeight: '600',
+    ...typography.footnoteStrong,
     color: colors.textPrimary,
+  },
+  labelCompact: {
+    ...typography.captionStrong,
   },
   labelSelected: {
     color: '#FFFFFF',
@@ -97,16 +152,15 @@ const styles = StyleSheet.create({
   },
   segment: {
     flex: 1,
+    flexDirection: 'row',
+    gap: 6,
     paddingVertical: 8,
     borderRadius: 9,
     alignItems: 'center',
-  },
-  segmentSelected: {
-    backgroundColor: colors.primary,
+    justifyContent: 'center',
   },
   segmentLabel: {
-    fontSize: 13,
-    fontWeight: '600',
+    ...typography.footnoteStrong,
     color: colors.textPrimary,
   },
   segmentLabelSelected: {

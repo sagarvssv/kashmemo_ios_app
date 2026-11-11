@@ -6,27 +6,43 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Tex
 import { Segmented } from '@/components/chip-group';
 import { Screen } from '@/components/screen';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
-import { colors, radius, spacing } from '@/constants/theme';
+import { GlassSurface } from '@/components/glass';
+import { FadeInItem, PressableScale } from '@/components/motion';
+import { type Palette, useBrand, useThemedStyles } from '@/constants/brand';
+import { iconBadge, radius, spacing, statusColors, TAB_BAR_CLEARANCE, typography } from '@/constants/theme';
 import { useRealtime, useSession } from '@/context/session';
 import { useCursorList } from '@/hooks/use-api';
 import { notificationApi } from '@/lib/endpoints';
-import { formatRelative } from '@/lib/format';
+import { formatRelative, ticketRef } from '@/lib/format';
 import type { AppNotification } from '@/lib/types';
+import { useMoneyText } from '@/lib/use-money';
 
 type Filter = 'all' | 'unread';
 
-const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  TICKET_RAISED_FOR_APPROVAL: 'hourglass-outline',
-  TICKET_APPROVED: 'checkmark-circle-outline',
-  TICKET_PARTIALLY_APPROVED: 'git-pull-request-outline',
-  TICKET_REJECTED: 'close-circle-outline',
-  TICKET_DISBURSED: 'cash-outline',
-  BUDGET_ALLOCATED: 'pie-chart-outline',
-  NEW_EMPLOYEE_ADDED: 'person-add-outline',
-  DEPARTMENT_CREATED: 'business-outline',
+// `accent` names a palette accent (resolved per role); status alerts keep their status color.
+const ICONS: Record<string, { icon: keyof typeof Ionicons.glyphMap; tint?: string; accent?: keyof Palette['accents'] }> = {
+  TICKET_RAISED_FOR_APPROVAL: { icon: 'hourglass-outline', tint: statusColors.PENDING.text },
+  TICKET_APPROVED: { icon: 'checkmark-circle-outline', tint: statusColors.APPROVED.text },
+  TICKET_PARTIALLY_APPROVED: { icon: 'git-pull-request-outline', tint: statusColors.PARTIALLY_APPROVED.text },
+  TICKET_REJECTED: { icon: 'close-circle-outline', tint: statusColors.REJECTED.text },
+  TICKET_DISBURSED: { icon: 'cash-outline', tint: statusColors.DISBURSED.text },
+  BUDGET_ALLOCATED: { icon: 'pie-chart-outline', accent: 'green' },
+  NEW_EMPLOYEE_ADDED: { icon: 'person-add-outline', accent: 'violet' },
+  DEPARTMENT_CREATED: { icon: 'business-outline', accent: 'blue' },
+  BILL_SUBMITTED_FOR_APPROVAL: { icon: 'receipt-outline', tint: statusColors.PENDING.text },
+  BILL_APPROVED: { icon: 'checkmark-circle-outline', tint: statusColors.APPROVED.text },
+  BILL_REJECTED: { icon: 'close-circle-outline', tint: statusColors.REJECTED.text },
+  ADVANCE_SETTLEMENT_REQUESTED: { icon: 'swap-horizontal-outline', tint: statusColors.SETTLEMENT_PENDING.text },
+  ADVANCE_SETTLED: { icon: 'checkmark-done-outline', tint: statusColors.SETTLED.text },
 };
+const DEFAULT_ICON: { icon: keyof typeof Ionicons.glyphMap; tint?: string } = { icon: 'notifications-outline' };
 
 export default function AlertsScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const brand = useBrand();
+  const alertTint = (entry: { tint?: string; accent?: keyof Palette['accents'] }) =>
+    entry.tint ?? (entry.accent ? brand.accents[entry.accent] : brand.primary);
+  const moneyText = useMoneyText();
   const { unreadCount, refreshUnreadCount } = useSession();
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -78,7 +94,7 @@ export default function AlertsScreen() {
       right={
         unreadCount > 0 ? (
           <Pressable onPress={markAllRead} hitSlop={8}>
-            <Text style={styles.markAll}>Mark all read</Text>
+            <Text style={[styles.markAll, { color: brand.primary }]}>Mark all read</Text>
           </Pressable>
         ) : undefined
       }>
@@ -94,11 +110,13 @@ export default function AlertsScreen() {
       </View>
 
       {list.isLoading && list.items.length === 0 ? (
-        <LoadingState />
+        <LoadingState padded />
       ) : list.error && list.items.length === 0 ? (
         <ErrorState message={list.error} onRetry={list.reload} />
       ) : (
         <FlatList
+          // Rows embed converted amounts; re-render them when the currency changes.
+          extraData={moneyText}
           data={list.items}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
@@ -107,23 +125,31 @@ export default function AlertsScreen() {
           onEndReached={() => void list.loadMore()}
           onEndReachedThreshold={0.4}
           ListEmptyComponent={<EmptyState icon="notifications-off-outline" title="No notifications" />}
-          ListFooterComponent={list.isLoadingMore ? <ActivityIndicator style={styles.footer} /> : null}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => open(item)}
-              style={({ pressed }) => [styles.item, !item.isRead && styles.unread, pressed && { opacity: 0.7 }]}>
-              <View style={styles.icon}>
-                <Ionicons name={ICONS[item.type] ?? 'notifications-outline'} size={20} color={colors.primary} />
+          ListFooterComponent={list.isLoadingMore ? <ActivityIndicator style={styles.footer} /> : undefined}
+          renderItem={({ item, index }) => (
+            <FadeInItem index={index}>
+            <PressableScale onPress={() => open(item)}>
+            <GlassSurface style={[styles.item, !item.isRead && [styles.unread, { borderColor: brand.primary }]]}>
+              <View style={[styles.icon, { backgroundColor: iconBadge(alertTint(ICONS[item.type] ?? DEFAULT_ICON)) }]}>
+                <Ionicons
+                  name={(ICONS[item.type] ?? DEFAULT_ICON).icon}
+                  size={17}
+                  color={alertTint(ICONS[item.type] ?? DEFAULT_ICON)}
+                />
               </View>
               <View style={styles.text}>
-                <Text style={[styles.message, !item.isRead && styles.messageUnread]}>{item.message}</Text>
+                <Text style={[styles.message, !item.isRead && styles.messageUnread]}>{moneyText(item.message)}</Text>
                 {item.metadata?.rejectionReason ? (
                   <Text style={styles.detail}>Reason: {item.metadata.rejectionReason}</Text>
                 ) : null}
-                <Text style={styles.time}>{formatRelative(item.createdAt)}</Text>
+                <Text style={styles.time}>
+                  {[ticketRef(item.metadata?.ticketId), formatRelative(item.createdAt)].filter(Boolean).join(' · ')}
+                </Text>
               </View>
-              {!item.isRead && <View style={styles.dot} />}
-            </Pressable>
+              {!item.isRead && <View style={[styles.dot, { backgroundColor: brand.primary }]} />}
+            </GlassSurface>
+            </PressableScale>
+            </FadeInItem>
           )}
         />
       )}
@@ -131,10 +157,10 @@ export default function AlertsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) =>
+  StyleSheet.create({
   markAll: {
-    fontSize: 13,
-    fontWeight: '600',
+    ...typography.footnoteStrong,
     color: colors.primary,
   },
   filters: {
@@ -143,7 +169,7 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingHorizontal: spacing.four,
-    paddingBottom: spacing.eight,
+    paddingBottom: TAB_BAR_CLEARANCE,
   },
   separator: {
     height: spacing.two,
@@ -154,20 +180,17 @@ const styles = StyleSheet.create({
   item: {
     flexDirection: 'row',
     gap: spacing.three,
-    backgroundColor: colors.surface,
     borderRadius: radius.medium,
     padding: spacing.three,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
   },
   unread: {
     borderColor: colors.primary,
+    borderWidth: 1,
   },
   icon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.background,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -176,18 +199,18 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   message: {
-    fontSize: 14,
+    ...typography.callout,
     color: colors.textPrimary,
   },
   messageUnread: {
     fontWeight: '600',
   },
   detail: {
-    fontSize: 13,
+    ...typography.footnote,
     color: colors.textMuted,
   },
   time: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.textMuted,
   },
   dot: {

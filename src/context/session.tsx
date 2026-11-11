@@ -26,6 +26,9 @@ type SessionContextValue = {
   lastUser: SessionUser | null;
   isReady: boolean;
   unreadCount: number;
+  // Bills raised by other people since the Bills tab was last opened.
+  newBillCount: number;
+  clearNewBillCount: () => void;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -52,6 +55,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   if (user && user !== lastUser) setLastUser(user);
   const [isReady, setIsReady] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [newBillCount, setNewBillCount] = useState(0);
+  const clearNewBillCount = useCallback(() => setNewBillCount(0), []);
   const listeners = useRef(new Map<RealtimeEvent, Set<Listener>>());
 
   const persistUser = useCallback(async (next: SessionUser | null) => {
@@ -95,6 +100,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     await clearSessionStorage();
     setUser(null);
     setUnreadCount(0);
+    setNewBillCount(0);
   }, []);
 
   // Restore a saved session on launch.
@@ -114,6 +120,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     onSessionExpired(() => {
       setUser(null);
       setUnreadCount(0);
+      setNewBillCount(0);
     });
     return () => onSessionExpired(null);
   }, []);
@@ -164,6 +171,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     for (const event of REALTIME_EVENTS) {
       socket.on(event, (payload: unknown) => {
         if (event === 'notification') setUnreadCount((count) => count + 1);
+        // The raiser also receives their own ticket:created; only count other people's bills.
+        if (event === 'ticket:created') {
+          const raisedBy = (payload as { ticket?: { raisedBy?: string } } | null)?.ticket?.raisedBy;
+          if (raisedBy && raisedBy !== userId) setNewBillCount((count) => count + 1);
+        }
         listeners.current.get(event)?.forEach((listener) => listener(payload));
       });
     }
@@ -213,8 +225,32 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, lastUser, isReady, unreadCount, signIn, signOut, refreshProfile, refreshUnreadCount, subscribe }),
-    [user, lastUser, isReady, unreadCount, signIn, signOut, refreshProfile, refreshUnreadCount, subscribe],
+    () => ({
+      user,
+      lastUser,
+      isReady,
+      unreadCount,
+      newBillCount,
+      clearNewBillCount,
+      signIn,
+      signOut,
+      refreshProfile,
+      refreshUnreadCount,
+      subscribe,
+    }),
+    [
+      user,
+      lastUser,
+      isReady,
+      unreadCount,
+      newBillCount,
+      clearNewBillCount,
+      signIn,
+      signOut,
+      refreshProfile,
+      refreshUnreadCount,
+      subscribe,
+    ],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

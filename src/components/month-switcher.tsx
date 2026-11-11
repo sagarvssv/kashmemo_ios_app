@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
-import { colors, spacing } from '@/constants/theme';
+import { GlassSurface } from '@/components/glass';
+import { type Palette, useBrand, useThemedStyles } from '@/constants/brand';
+import { spacing, typography } from '@/constants/theme';
 import { formatMonth } from '@/lib/format';
 
 export type MonthValue = { month: number; year: number };
@@ -18,33 +20,33 @@ function shift(value: MonthValue, delta: number): MonthValue {
 }
 
 export function MonthSwitcher({ value, onChange }: { value: MonthValue; onChange: (value: MonthValue) => void }) {
+  const styles = useThemedStyles(makeStyles);
+  const brand = useBrand();
   return (
-    <View style={styles.container}>
+    <GlassSurface style={styles.container}>
       <Pressable onPress={() => onChange(shift(value, -1))} hitSlop={8} accessibilityLabel="Previous month">
-        <Ionicons name="chevron-back" size={20} color={colors.primary} />
+        <Ionicons name="chevron-back" size={20} color={brand.primary} />
       </Pressable>
       <Text style={styles.label}>{formatMonth(value.month, value.year)}</Text>
       <Pressable onPress={() => onChange(shift(value, 1))} hitSlop={8} accessibilityLabel="Next month">
-        <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+        <Ionicons name="chevron-forward" size={20} color={brand.primary} />
       </Pressable>
-    </View>
+    </GlassSurface>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) =>
+  StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surface,
     borderRadius: 12,
     paddingHorizontal: spacing.four,
     paddingVertical: spacing.three,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
   },
   label: {
-    fontSize: 15,
+    ...typography.bodyStrong,
     fontWeight: '700',
     color: colors.textPrimary,
   },

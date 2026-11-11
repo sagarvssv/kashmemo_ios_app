@@ -1,4 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
+import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { Share, StyleSheet, Text, View } from 'react-native';
@@ -7,7 +8,9 @@ import { Card, ListRow } from '@/components/card';
 import { PrimaryButton } from '@/components/primary-button';
 import { Screen } from '@/components/screen';
 import { InlineError } from '@/components/states';
-import { colors, spacing } from '@/constants/theme';
+import { SuccessCelebration } from '@/components/success-celebration';
+import { type Palette, useThemedStyles } from '@/constants/brand';
+import { spacing, typography } from '@/constants/theme';
 import { ApiError, errorMessage } from '@/lib/api';
 import { employeeApi } from '@/lib/endpoints';
 
@@ -15,6 +18,7 @@ type PickedFile = { uri: string; name: string; mimeType?: string; file?: File };
 type RowError = { row: number; email?: string; reason: string };
 
 export default function UploadCsvScreen() {
+  const styles = useThemedStyles(makeStyles);
   const [file, setFile] = useState<PickedFile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<RowError[]>([]);
@@ -55,16 +59,37 @@ export default function UploadCsvScreen() {
     try {
       const { data } = await employeeApi.uploadCsv(file);
       setInsertedCount(data.insertedCount);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setFile(null);
     } catch (err) {
       setError(errorMessage(err));
-      // The backend's global error handler drops ApiError details, but read them if present.
+      // Per-row problems arrive as details.errors on a 400.
       const details = err instanceof ApiError ? (err.body as { details?: { errors?: RowError[] } })?.details : undefined;
       setRowErrors(details?.errors ?? []);
     } finally {
       setIsUploading(false);
     }
   };
+
+  if (insertedCount !== null) {
+    return (
+      <SuccessCelebration
+        title={`${insertedCount} employee${insertedCount === 1 ? '' : 's'} added`}
+        message="Everyone has been emailed a temporary password and can log in right away."
+        actions={
+          <>
+            <PrimaryButton label="Done" icon="checkmark" onPress={() => router.back()} />
+            <PrimaryButton
+              label="Upload another file"
+              variant="secondary"
+              icon="cloud-upload-outline"
+              onPress={() => setInsertedCount(null)}
+            />
+          </>
+        }
+      />
+    );
+  }
 
   return (
     <Screen
@@ -123,11 +148,11 @@ export default function UploadCsvScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) =>
+  StyleSheet.create({
   hint: {
-    fontSize: 14,
+    ...typography.callout,
     color: colors.textMuted,
-    lineHeight: 20,
   },
   success: {
     backgroundColor: '#DCFCE7',
@@ -139,7 +164,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   rowError: {
-    fontSize: 13,
+    ...typography.footnote,
     color: colors.danger,
   },
 });

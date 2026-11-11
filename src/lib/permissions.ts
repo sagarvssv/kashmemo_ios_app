@@ -23,6 +23,15 @@ export const can = {
   viewDisbursedReport: (role: UserRole) => role === 'CEO',
   viewDailyReport: (role: UserRole) => role === 'CEO' || role === 'FINANCE_MANAGER',
   viewReports: (role: UserRole) => role === 'CEO' || role === 'FINANCE_MANAGER',
+  // Personal payouts view; hidden for the CEO, who approves rather than claims.
+  viewWallet: (role: UserRole) => role !== 'CEO',
+  // Own scanned receipts; hidden for the CEO for the same reason.
+  viewReceipts: (role: UserRole) => role !== 'CEO',
+  reviewBills: (role: UserRole) => role === 'MANAGER' || role === 'FINANCE_MANAGER' || role === 'CEO',
+  viewOutstandingAdvances: (role: UserRole) => ORG_ADMIN_ROLES.includes(role),
+  // Coarse check only; use canSettleAdvance() for a specific advance.
+  settleAdvance: (role: UserRole) => role === 'FINANCE_MANAGER' || role === 'CEO',
+  deleteOrganization: (role: UserRole) => role === 'CEO',
 };
 
 // Same table as getAllowedApproverRoles() in the backend.
@@ -30,6 +39,32 @@ export function approverRolesFor(raiserRole: UserRole): UserRole[] {
   if (raiserRole === 'FINANCE_MANAGER') return ['CEO'];
   if (raiserRole === 'MANAGER') return ['FINANCE_MANAGER'];
   return ['MANAGER', 'CEO', 'HR', 'FINANCE_MANAGER'];
+}
+
+// Same table as getAllowedSettlerRoles() in the backend:
+// a Finance Manager's own advance is settled by the CEO only.
+export function settlerRolesFor(raiserRole: UserRole): UserRole[] {
+  if (raiserRole === 'FINANCE_MANAGER') return ['CEO'];
+  return ['FINANCE_MANAGER', 'CEO'];
+}
+
+// Who the raiser hands their cash to / gets paid by at settlement.
+export function settlerLabelFor(raiserRole: UserRole): string {
+  return raiserRole === 'FINANCE_MANAGER' ? 'the CEO' : 'finance';
+}
+
+export function canSettleAdvance(params: {
+  myRole: UserRole;
+  myId: string;
+  raisedBy: string;
+  raiserRole: UserRole | undefined;
+  status: TicketStatus;
+}) {
+  const { myRole, myId, raisedBy, raiserRole, status } = params;
+  if (status !== 'SETTLEMENT_PENDING' || myId === raisedBy) return false;
+  // Until the raiser's role has loaded, don't offer the button.
+  if (!raiserRole) return false;
+  return settlerRolesFor(raiserRole).includes(myRole);
 }
 
 export function canActOnTicket(params: {

@@ -2,24 +2,29 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Card, ListRow, Section } from '@/components/card';
+import { Card, IdValue, KeyValue, ListRow, Section } from '@/components/card';
 import { currentMonth, MonthSwitcher, type MonthValue } from '@/components/month-switcher';
 import { PrimaryButton } from '@/components/primary-button';
 import { PromptModal } from '@/components/prompt-modal';
 import { Screen } from '@/components/screen';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { TicketRow } from '@/components/ticket-row';
+import { useToast } from '@/components/toast';
 import { spacing } from '@/constants/theme';
 import { useCurrentUser, useRealtime } from '@/context/session';
 import { BudgetCard } from '@/features/dashboard/shared';
 import { useApi } from '@/hooks/use-api';
+import { CURRENCY } from '@/lib/config';
 import { departmentApi, employeeApi, ticketApi } from '@/lib/endpoints';
-import { formatMonth, ROLE_LABELS, toAmount } from '@/lib/format';
+import { formatMonth, ROLE_LABELS, shortId, toAmount } from '@/lib/format';
 import { can } from '@/lib/permissions';
+import { useMoney } from '@/lib/use-money';
 
 export default function DepartmentDetailScreen() {
+  const formatMoney = useMoney();
   const params = useLocalSearchParams<{ id: string; month?: string; year?: string }>();
   const user = useCurrentUser();
+  const toast = useToast();
   const [month, setMonth] = useState<MonthValue>(() =>
     params.month && params.year ? { month: Number(params.month), year: Number(params.year) } : currentMonth(),
   );
@@ -52,9 +57,13 @@ export default function DepartmentDetailScreen() {
 
   return (
     <Screen title={name} backFallback="/departments" refreshing={status.isRefreshing} onRefresh={refresh}>
+      <Card>
+        <KeyValue icon="finger-print-outline" label="Department ID" value={<IdValue id={params.id} />} />
+      </Card>
+
       <MonthSwitcher value={month} onChange={setMonth} />
 
-      {status.isLoading && !status.data ? <LoadingState /> : null}
+      {status.isLoading && !status.data ? <LoadingState variant="cards" /> : null}
       {status.error && !status.data ? <ErrorState message={status.error} onRetry={status.reload} /> : null}
       {status.data && <BudgetCard status={status.data} />}
 
@@ -71,8 +80,8 @@ export default function DepartmentDetailScreen() {
         <Section title="Recent tickets">
           {tickets.data && tickets.data.length > 0 ? (
             <View style={styles.list}>
-              {tickets.data.map((ticket) => (
-                <TicketRow key={ticket.id} ticket={ticket} />
+              {tickets.data.map((ticket, index) => (
+                <TicketRow key={ticket.id} ticket={ticket} index={index} />
               ))}
             </View>
           ) : (
@@ -92,7 +101,7 @@ export default function DepartmentDetailScreen() {
               key={employee.id}
               icon="person-outline"
               title={employee.name}
-              subtitle={[ROLE_LABELS[employee.role], employee.designation].filter(Boolean).join(' · ')}
+              subtitle={[ROLE_LABELS[employee.role], employee.designation, shortId(employee.id)].filter(Boolean).join(' · ')}
               onPress={() => router.push({ pathname: '/employee/[id]', params: { id: employee.id } })}
             />
           ))}
@@ -106,7 +115,7 @@ export default function DepartmentDetailScreen() {
         fields={[
           {
             key: 'amount',
-            label: 'Amount',
+            label: `Amount (${CURRENCY})`,
             keyboardType: 'decimal-pad',
             initialValue: currentBudget.data ? String(toAmount(currentBudget.data.amount)) : '',
           },
@@ -118,6 +127,7 @@ export default function DepartmentDetailScreen() {
           if (!Number.isFinite(parsed) || parsed < 1) throw new Error('Enter an amount of at least 1.');
           await departmentApi.allocateBudget({ departmentId: params.id, amount: parsed, ...month });
           await Promise.all([status.reload(), currentBudget.reload()]);
+          toast.show({ title: 'Budget saved', message: `${name} has ${formatMoney(parsed)} for ${formatMonth(month.month, month.year)}.` });
         }}
       />
     </Screen>

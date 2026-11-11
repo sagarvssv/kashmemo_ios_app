@@ -3,21 +3,30 @@ import { useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { ActionSheetIOS, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Card, ListRow, Section } from '@/components/card';
+import { Card, IdValue, KeyValue, ListRow, Section } from '@/components/card';
 import { PrimaryButton } from '@/components/primary-button';
 import { PromptModal } from '@/components/prompt-modal';
 import { Screen } from '@/components/screen';
 import { SelectField } from '@/components/select-field';
 import { EmptyState, ErrorState, InlineError, LoadingState } from '@/components/states';
 import { Tag } from '@/components/status-badge';
-import { colors, spacing } from '@/constants/theme';
+import { useToast } from '@/components/toast';
+import { type Palette, useBrand, useColors, useThemedStyles } from '@/constants/brand';
+import { spacing, typography } from '@/constants/theme';
 import { useApi } from '@/hooks/use-api';
 import { errorMessage } from '@/lib/api';
 import { departmentApi, managerApi } from '@/lib/endpoints';
+import { shortId } from '@/lib/format';
 import type { ManagerDepartment } from '@/lib/types';
+import { useMoney } from '@/lib/use-money';
 
 export default function ManagerDepartmentsScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const colors = useColors();
+  const brand = useBrand();
+  const formatMoney = useMoney();
   const { id, name } = useLocalSearchParams<{ id: string; name?: string }>();
+  const toast = useToast();
   const [limitFor, setLimitFor] = useState<ManagerDepartment | null>(null);
   const [isEditingExtras, setIsEditingExtras] = useState(false);
   const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
@@ -33,11 +42,12 @@ export default function ManagerDepartmentsScreen() {
   const assignedIds = new Set(assignedList.map((department) => department.id));
   const unassigned = (allDepartments.data ?? []).filter((department) => !assignedIds.has(department.id));
 
-  const run = async (action: () => Promise<unknown>) => {
+  const run = async (action: () => Promise<unknown>, successTitle: string) => {
     setError(null);
     try {
       await action();
       await assigned.reload();
+      toast.show({ title: successTitle });
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -50,10 +60,10 @@ export default function ManagerDepartmentsScreen() {
     const handle = (index: number) => {
       if (index === 0) setLimitFor(department);
       if (!department.isPrimary && index === 1) {
-        void run(() => managerApi.setPrimaryDepartment(id, department.id));
+        void run(() => managerApi.setPrimaryDepartment(id, department.id), `${department.name} is now the primary department`);
       }
       if (!department.isPrimary && index === 2) {
-        void run(() => managerApi.unassignDepartment(id, department.id));
+        void run(() => managerApi.unassignDepartment(id, department.id), `Removed ${department.name}`);
       }
     };
 
@@ -93,7 +103,7 @@ export default function ManagerDepartmentsScreen() {
 
   const saveExtras = async () => {
     setIsSaving(true);
-    await run(() => managerApi.replaceDepartments(id, selectedExtras));
+    await run(() => managerApi.replaceDepartments(id, selectedExtras), 'Departments updated');
     setIsSaving(false);
     setIsEditingExtras(false);
   };
@@ -106,12 +116,17 @@ export default function ManagerDepartmentsScreen() {
       refreshing={assigned.isRefreshing}
       onRefresh={assigned.refresh}>
       <Text style={styles.hint}>
-        A manager approves tickets for every department listed here, up to the approval limit set for each one.
+        A manager can approve an employee&apos;s ticket alone up to the limit for that department. Above it, the ticket
+        also needs your approval. Tap a department to change its limit.
       </Text>
+
+      <Card>
+        <KeyValue icon="id-card-outline" label="Manager ID" value={<IdValue id={id} />} />
+      </Card>
 
       <InlineError message={error} />
 
-      {assigned.isLoading && !assigned.data ? <LoadingState /> : null}
+      {assigned.isLoading && !assigned.data ? <LoadingState variant="cards" /> : null}
       {/* The backend answers 400 "not assigned to a department" for a manager without a primary department. */}
       {assigned.error && !assigned.data ? (
         assigned.error.includes('not assigned') ? (
@@ -127,7 +142,7 @@ export default function ManagerDepartmentsScreen() {
           placeholder="Choose a primary department"
           value={null}
           options={(allDepartments.data ?? []).map((department) => ({ value: department.id, label: department.name }))}
-          onChange={(departmentId) => void run(() => managerApi.setPrimaryDepartment(id, departmentId))}
+          onChange={(departmentId) => void run(() => managerApi.setPrimaryDepartment(id, departmentId), 'Primary department set')}
         />
       )}
 
@@ -140,6 +155,7 @@ export default function ManagerDepartmentsScreen() {
                 key={department.id}
                 icon={department.isPrimary ? 'star' : 'business-outline'}
                 title={department.name}
+                subtitle={`Limit ${formatMoney(department.approvalLimit)}${department.isDefaultLimit ? ' (default)' : ''} · ${shortId(department.id)}`}
                 right={department.isPrimary ? <Tag label="Primary" /> : undefined}
                 onPress={() => openDepartmentActions(department)}
               />
@@ -154,7 +170,7 @@ export default function ManagerDepartmentsScreen() {
           placeholder="Assign another department"
           value={null}
           options={unassigned.map((department) => ({ value: department.id, label: department.name }))}
-          onChange={(departmentId) => void run(() => managerApi.assignDepartment(id, departmentId))}
+          onChange={(departmentId) => void run(() => managerApi.assignDepartment(id, departmentId), 'Department assigned')}
         />
       )}
 
@@ -170,7 +186,7 @@ export default function ManagerDepartmentsScreen() {
                     <Ionicons
                       name={checked ? 'checkbox' : 'square-outline'}
                       size={22}
-                      color={checked ? colors.primary : colors.textMuted}
+                      color={checked ? brand.primary : colors.textMuted}
                     />
                     <Text style={styles.checkLabel}>{department.name}</Text>
                   </Pressable>
@@ -194,25 +210,35 @@ export default function ManagerDepartmentsScreen() {
         title="Approval limit"
         message={
           limitFor
-            ? `Maximum ticket amount this manager can approve in ${limitFor.name}. The default is 1,000.`
+            ? `Highest ticket amount ${name ?? 'this manager'} can approve alone in ${limitFor.name}. Tickets above it also need your approval.`
             : undefined
         }
-        fields={[{ key: 'limit', label: 'Limit', keyboardType: 'decimal-pad', placeholder: '1000' }]}
+        fields={[
+          {
+            key: 'limit',
+            label: 'Limit',
+            keyboardType: 'decimal-pad',
+            initialValue: limitFor ? String(limitFor.approvalLimit) : '',
+          },
+        ]}
         confirmLabel="Save limit"
         onClose={() => setLimitFor(null)}
         onSubmit={async ({ limit }) => {
           const parsed = Number(limit.replace(/,/g, ''));
           if (!Number.isFinite(parsed) || parsed <= 0) throw new Error('Enter a limit greater than 0.');
           if (limitFor) await managerApi.setApprovalLimit(id, limitFor.id, parsed);
+          await assigned.reload();
+          toast.show({ title: 'Approval limit saved', message: limitFor ? `${formatMoney(parsed)} in ${limitFor.name}.` : undefined });
         }}
       />
     </Screen>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) =>
+  StyleSheet.create({
   hint: {
-    fontSize: 14,
+    ...typography.callout,
     color: colors.textMuted,
   },
   rows: {
@@ -226,7 +252,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.three,
   },
   checkLabel: {
-    fontSize: 15,
+    ...typography.body,
     color: colors.textPrimary,
   },
   editActions: {

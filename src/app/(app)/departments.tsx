@@ -1,19 +1,23 @@
-import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 
+import { Card } from '@/components/card';
 import { currentMonth, MonthSwitcher } from '@/components/month-switcher';
 import { Screen } from '@/components/screen';
 import { StatGrid, StatTile } from '@/components/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
+import { useColors } from '@/constants/brand';
 import { spacing } from '@/constants/theme';
 import { useRealtime } from '@/context/session';
-import { BudgetCard } from '@/features/dashboard/shared';
+import { DepartmentBudgetRow } from '@/features/dashboard/shared';
 import { useApi } from '@/hooks/use-api';
 import { departmentApi } from '@/lib/endpoints';
-import { formatMoney } from '@/lib/format';
+import { useMoney } from '@/lib/use-money';
 
 export default function DepartmentsScreen() {
+  const colors = useColors();
+  const accents = colors.accents;
+  const formatMoney = useMoney();
   const [month, setMonth] = useState(currentMonth);
 
   const statuses = useApi(async () => {
@@ -37,14 +41,14 @@ export default function DepartmentsScreen() {
       onRefresh={statuses.refresh}>
       <MonthSwitcher value={month} onChange={setMonth} />
 
-      {statuses.isLoading && !statuses.data ? <LoadingState /> : null}
+      {statuses.isLoading && !statuses.data ? <LoadingState variant="cards" /> : null}
       {statuses.error && !statuses.data ? <ErrorState message={statuses.error} onRetry={statuses.reload} /> : null}
 
       {statuses.data && (
         <>
           <StatGrid>
             <StatTile label="Allocated" value={formatMoney(allocated)} icon="pie-chart-outline" tone="highlight" />
-            <StatTile label="Spent" value={formatMoney(spent)} icon="trending-up-outline" />
+            <StatTile label="Spent" value={formatMoney(spent)} icon="trending-up-outline" tint={accents.blue} />
           </StatGrid>
           {list.length === 0 ? (
             <EmptyState
@@ -53,20 +57,11 @@ export default function DepartmentsScreen() {
               message="Departments are created when you add employees."
             />
           ) : (
-            <View style={styles.list}>
-              {list.map((status) => (
-                <BudgetCard
-                  key={status.departmentId.id}
-                  status={status}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/department/[id]',
-                      params: { id: status.departmentId.id, month: String(month.month), year: String(month.year) },
-                    })
-                  }
-                />
+            <Card style={styles.list}>
+              {list.map((status, index) => (
+                <DepartmentBudgetRow key={status.departmentId.id} status={status} first={index === 0} month={month} />
               ))}
-            </View>
+            </Card>
           )}
         </>
       )}
@@ -76,6 +71,7 @@ export default function DepartmentsScreen() {
 
 const styles = StyleSheet.create({
   list: {
-    gap: spacing.three,
+    gap: 0,
+    paddingVertical: spacing.one,
   },
 });
