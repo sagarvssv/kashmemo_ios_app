@@ -1,6 +1,6 @@
 import type { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { ChipGroup, Segmented } from '@/components/chip-group';
@@ -51,7 +51,7 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string; icon: IconName; tint
 export default function TicketsScreen() {
   const palette = useColors();
   const user = useCurrentUser();
-  const params = useLocalSearchParams<{ scope?: Scope; status?: TicketStatus; departmentId?: string }>();
+  const params = useLocalSearchParams<{ scope?: Scope; status?: StatusFilter; departmentId?: string }>();
   const scopes = scopesFor(user.role);
   // Open on the wider view when there's a choice (Department / All tickets), else the only tab.
   const defaultScope = scopes.length > 1 ? scopes[1].value : (scopes[0]?.value ?? 'mine');
@@ -82,16 +82,26 @@ export default function TicketsScreen() {
     setDepartmentId(ALL_DEPARTMENTS);
   };
 
-  // Dashboard shortcuts deep-link into a scope and status; apply them whenever
-  // they change (adjusting state during render rather than in an effect).
+  // Dashboard shortcuts deep-link a complete filter (scope, status, department):
+  // anything a shortcut leaves out goes back to "All". Applied during render
+  // rather than in an effect, so the list never loads the old filter first.
   const paramsKey = `${params.scope ?? ''}|${params.status ?? ''}|${params.departmentId ?? ''}`;
+  const hasShortcut = paramsKey !== '||';
   const [appliedParamsKey, setAppliedParamsKey] = useState('||');
   if (paramsKey !== appliedParamsKey) {
     setAppliedParamsKey(paramsKey);
-    if (params.scope && scopes.some((option) => option.value === params.scope)) changeScope(params.scope);
-    if (params.status) setStatus(params.status);
-    if (params.departmentId) setDepartmentId(params.departmentId);
+    if (hasShortcut) {
+      if (params.scope && scopes.some((option) => option.value === params.scope)) setScope(params.scope);
+      setStatus(params.status && STATUS_OPTIONS.some((option) => option.value === params.status) ? params.status : 'ALL');
+      setDepartmentId(params.departmentId ?? ALL_DEPARTMENTS);
+    }
   }
+
+  // Then clear the shortcut from the route, so tapping the same shortcut again
+  // (after changing the chips here) is seen as new and re-applied.
+  useEffect(() => {
+    if (hasShortcut) router.setParams({ scope: undefined, status: undefined, departmentId: undefined });
+  }, [hasShortcut]);
 
   const list = useCursorList(
     async (cursor) => {

@@ -100,6 +100,7 @@ export default function TicketDetailScreen() {
     raisedBy: data.raisedBy,
     raiserRole: raiser.data?.role,
     status: data.status,
+    source: data.source,
   });
   const canDisburse = can.disburse(user.role) && data.status === 'APPROVED';
   const advanceData = advance.data;

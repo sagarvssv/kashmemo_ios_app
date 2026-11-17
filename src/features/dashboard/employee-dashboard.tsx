@@ -357,7 +357,7 @@ export function EmployeeDashboard() {
           recent.error ??
           (filter === 'ALL' ? "You haven't raised any claims yet" : `No ${STATUS_LABELS[filter].toLowerCase()} claims`)
         }
-        onSeeAll={() => router.push({ pathname: '/tickets', params: filter === 'ALL' ? {} : { status: filter } })}
+        onSeeAll={() => router.push({ pathname: '/tickets', params: { status: filter } })}
       />
     </Screen>
   );

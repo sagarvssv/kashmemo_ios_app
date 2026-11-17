@@ -10,8 +10,7 @@ import { type Palette, useBrand, useColors, useThemedStyles } from '@/constants/
 import { spacing, typography } from '@/constants/theme';
 import { useCurrentUser, useSession } from '@/context/session';
 import { useApi } from '@/hooks/use-api';
-import { API_BASE_URL } from '@/lib/config';
-import { authApi, managerApi } from '@/lib/endpoints';
+import { managerApi } from '@/lib/endpoints';
 import { humanize, initials, ROLE_LABELS, shortId } from '@/lib/format';
 import { useMoney } from '@/lib/use-money';
 
@@ -24,7 +23,6 @@ export default function MyProfileScreen() {
   const user = useCurrentUser();
   const { signOut, refreshProfile } = useSession();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const health = useApi(() => authApi.health(), []);
   const isManager = user.role === 'MANAGER';
   const myDepartments = useApi(
     () => (isManager ? managerApi.myDepartments().then((r) => r.data) : Promise.resolve([])),
@@ -42,7 +40,7 @@ export default function MyProfileScreen() {
 
   const refresh = async () => {
     setIsRefreshing(true);
-    await Promise.all([refreshProfile().catch(() => {}), health.reload()]);
+    await refreshProfile().catch(() => {});
     setIsRefreshing(false);
   };
 
@@ -116,13 +114,6 @@ export default function MyProfileScreen() {
           <ListRow icon="log-out-outline" title="Log out" destructive onPress={confirmSignOut} />
         </Card>
       </Section>
-
-      <View style={styles.server}>
-        <View style={[styles.serverDot, { backgroundColor: health.error ? colors.danger : '#16A34A' }]} />
-        <Text style={styles.serverText} numberOfLines={1}>
-          {health.error ? 'Server unreachable' : 'Connected'} · {API_BASE_URL}
-        </Text>
-      </View>
     </Screen>
   );
 }
@@ -174,20 +165,5 @@ const makeStyles = (colors: Palette) =>
   rows: {
     gap: 0,
     paddingVertical: spacing.one,
-  },
-  server: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.two,
-  },
-  serverDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  serverText: {
-    ...typography.caption,
-    color: colors.textMuted,
   },
 });

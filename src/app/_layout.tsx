@@ -1,6 +1,6 @@
-import { DefaultTheme, router, Stack, ThemeProvider } from 'expo-router';
+import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 
 import { ToastProvider } from '@/components/toast';
 import { BrandProvider, GREEN_PALETTE, NAVY_PALETTE, SKY_PALETTE, useColors, VIOLET_PALETTE } from '@/constants/brand';
@@ -18,20 +18,13 @@ const navigationTheme = {
 
 function RootNavigator() {
   const colors = useColors();
-  const { user, isReady } = useSession();
+  const { user } = useSession();
   const isSignedIn = Boolean(user);
 
-  // Move between the auth and app stacks after the guards above have updated,
-  // for sign-in, sign-out and an expired session alike. The splash screen
-  // handles the initial launch.
-  const wasSignedIn = useRef<boolean | null>(null);
-  useEffect(() => {
-    if (!isReady) return;
-    if (wasSignedIn.current !== null && wasSignedIn.current !== isSignedIn) {
-      router.replace(isSignedIn ? '/home' : '/login');
-    }
-    wasSignedIn.current = isSignedIn;
-  }, [isReady, isSignedIn]);
+  // No manual navigation here: when a guard flips (sign-in, sign-out, expired
+  // session), Stack.Protected redirects to the anchor route (`index`), which
+  // then sends the user to /home or /login. Navigating here as well raced with
+  // that redirect and caused "ROUTE_NAMES_CHANGED was not handled" errors.
 
   return (
     <Stack

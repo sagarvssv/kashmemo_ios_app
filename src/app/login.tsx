@@ -1,21 +1,17 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Link, router } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuroraBackground } from '@/components/aurora-background';
+import { BrandLogo, BRAND_GREEN } from '@/components/brand-logo';
 import { GlassSurface } from '@/components/glass';
-
 import { PrimaryButton } from '@/components/primary-button';
 import { TextField } from '@/components/text-field';
 import { type Palette, useThemedStyles } from '@/constants/brand';
 import { spacing, typography } from '@/constants/theme';
 import { useSession } from '@/context/session';
-
-const VCLOUDMASTER_URL = 'https://www.vcloudmaster.com';
 
 export default function LoginScreen() {
   const styles = useThemedStyles(makeStyles);
@@ -64,7 +60,7 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
             <Animated.View entering={ZoomIn.springify().damping(12)} style={styles.logoMark}>
-              <Ionicons name="leaf" size={28} color="#FFFFFF" />
+              <BrandLogo size={64} />
             </Animated.View>
             <Animated.Text entering={FadeInDown.delay(150).duration(450)} style={styles.title}>
               KashMemo
@@ -116,17 +112,6 @@ export default function LoginScreen() {
             </Text>
           </GlassSurface>
           </Animated.View>
-
-          <Text style={styles.footer}>
-            Powered by{' '}
-            <Text
-              style={styles.footerLink}
-              onPress={() => void WebBrowser.openBrowserAsync(VCLOUDMASTER_URL).catch(() => Linking.openURL(VCLOUDMASTER_URL))}
-              accessibilityRole="link"
-              accessibilityHint="Opens vcloudmaster.com">
-              Vcloudmaster
-            </Text>
-          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -156,8 +141,7 @@ const makeStyles = (colors: Palette) =>
     width: 64,
     height: 64,
     borderRadius: 16,
-    backgroundColor: colors.accentTeal,
-    shadowColor: colors.accentTeal,
+    shadowColor: BRAND_GREEN,
     shadowOpacity: 0.4,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
@@ -201,16 +185,5 @@ const makeStyles = (colors: Palette) =>
     textAlign: 'center',
     ...typography.caption,
     color: colors.textMuted,
-  },
-  footer: {
-    textAlign: 'center',
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.four,
-  },
-  footerLink: {
-    fontWeight: '700',
-    color: colors.primary,
-    textDecorationLine: 'underline',
   },
 });

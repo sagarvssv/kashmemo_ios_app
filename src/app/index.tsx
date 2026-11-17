@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
@@ -17,7 +16,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 
-import { typography } from '@/constants/theme';
+import { BrandLogo } from '@/components/brand-logo';
+import { colors, typography } from '@/constants/theme';
 import { useSession } from '@/context/session';
 
 const MIN_SPLASH_MS = 1600;
@@ -25,14 +25,20 @@ const MIN_SPLASH_MS = 1600;
 // Brand greens, darkest at the top-left.
 const GRADIENT = ['#051f09', '#0e4b14', '#1c5b4c'];
 
+// This route is also where Stack.Protected lands after every sign-in and
+// sign-out, so only hold the splash on the first launch.
+let hasShownSplash = false;
+
 export default function SplashScreen() {
   const { user, isReady } = useSession();
-  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
-  const { width, height } = useWindowDimensions();
-  const reduceMotion = useReducedMotion();
+  const [minTimeElapsed, setMinTimeElapsed] = useState(hasShownSplash);
 
   useEffect(() => {
-    const timer = setTimeout(() => setMinTimeElapsed(true), MIN_SPLASH_MS);
+    if (hasShownSplash) return;
+    const timer = setTimeout(() => {
+      hasShownSplash = true;
+      setMinTimeElapsed(true);
+    }, MIN_SPLASH_MS);
     return () => clearTimeout(timer);
   }, []);
 
@@ -40,6 +46,17 @@ export default function SplashScreen() {
     if (!isReady || !minTimeElapsed) return;
     router.replace(user ? '/home' : '/login');
   }, [isReady, minTimeElapsed, user]);
+
+  // After sign-in or sign-out this route is only passed through on the way to
+  // Home or Login, so show a plain background instead of replaying the splash.
+  if (hasShownSplash) return <View style={styles.passThrough} />;
+
+  return <SplashContent />;
+}
+
+function SplashContent() {
+  const { width, height } = useWindowDimensions();
+  const reduceMotion = useReducedMotion();
 
   // Loading bar fills over the minimum splash time.
   const progress = useSharedValue(0);
@@ -71,9 +88,7 @@ export default function SplashScreen() {
           {!reduceMotion && <PulseRing delay={0} />}
           {!reduceMotion && <PulseRing delay={900} />}
           <Animated.View entering={ZoomIn.springify().damping(11).stiffness(140)} style={styles.logoGlass}>
-            <View style={styles.logoMark}>
-              <Ionicons name="leaf" size={42} color="#FFFFFF" />
-            </View>
+            <BrandLogo size={LOGO - 20} />
           </Animated.View>
         </View>
 
@@ -152,6 +167,10 @@ function Glow({
 const LOGO = 112;
 
 const styles = StyleSheet.create({
+  passThrough: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   container: {
     flex: 1,
     backgroundColor: GRADIENT[1],
@@ -191,13 +210,6 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 14 },
     elevation: 12,
-  },
-  logoMark: {
-    flex: 1,
-    borderRadius: 26,
-    backgroundColor: '#1baf7a',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   title: {
     ...typography.display,

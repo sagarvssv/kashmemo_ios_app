@@ -1,4 +1,4 @@
-import type { TicketStatus, UserRole } from './types';
+import type { TicketSource, TicketStatus, UserRole } from './types';
 
 // Mirrors the role checks in the backend controllers so the UI only offers
 // actions the server will accept. The server remains the source of truth.
@@ -67,15 +67,27 @@ export function canSettleAdvance(params: {
   return settlerRolesFor(raiserRole).includes(myRole);
 }
 
+const RECEIPT_APPROVER_ROLES: UserRole[] = ['MANAGER', 'FINANCE_MANAGER', 'CEO'];
+
 export function canActOnTicket(params: {
   myRole: UserRole;
   myId: string;
   raisedBy: string;
   raiserRole: UserRole | undefined;
   status: TicketStatus;
+  source?: TicketSource;
 }) {
-  const { myRole, myId, raisedBy, raiserRole, status } = params;
+  const { myRole, myId, raisedBy, raiserRole, status, source } = params;
   if (myId === raisedBy) return { approve: false, reject: false };
+  // Bills (receipt tickets): any one of these approves, with no dual sign-off
+  // (approveReceiptTicket in the backend). Rejecting follows the normal table.
+  if (source === 'RECEIPT') {
+    if (status !== 'PENDING') return { approve: false, reject: false };
+    return {
+      approve: RECEIPT_APPROVER_ROLES.includes(myRole),
+      reject: approverRolesFor(raiserRole ?? 'EMPLOYEE').includes(myRole),
+    };
+  }
   if (status !== 'PENDING' && status !== 'PARTIALLY_APPROVED') return { approve: false, reject: false };
   const allowed = approverRolesFor(raiserRole ?? 'EMPLOYEE').includes(myRole);
   // HR may reject but the approval service only accepts Manager, CEO and Finance.

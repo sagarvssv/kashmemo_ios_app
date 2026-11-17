@@ -23,6 +23,8 @@ type RequestOptions = {
   responseType?: 'json' | 'text';
 };
 
+const REQUEST_TIMEOUT_MS = 20000;
+
 let sessionExpiredHandler: (() => void) | null = null;
 
 // The session provider registers this so a failed refresh logs the user out.
@@ -105,6 +107,11 @@ async function send(path: string, options: RequestOptions, accessToken: string |
   }
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
 
+  // fetch never times out on its own, so an unreachable backend would leave the
+  // caller waiting forever (e.g. a login button stuck on "Signing in...").
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   try {
     // credentials: 'omit' keeps the backend's auth cookies out of the picture so
     // the Bearer token in secure storage is the single source of truth.
@@ -113,9 +120,15 @@ async function send(path: string, options: RequestOptions, accessToken: string |
       headers,
       body,
       credentials: 'omit',
+      signal: controller.signal,
     });
   } catch {
+    if (controller.signal.aborted) {
+      throw new ApiError(0, `The server at ${API_BASE_URL} took too long to respond. Please try again.`);
+    }
     throw new ApiError(0, `Unable to reach the server at ${API_BASE_URL}. Check your connection and try again.`);
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
