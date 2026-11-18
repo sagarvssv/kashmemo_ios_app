@@ -12,6 +12,7 @@ import { typography } from '@/constants/theme';
 import { errorMessage } from '@/lib/api';
 import { authApi } from '@/lib/endpoints';
 import { humanize } from '@/lib/format';
+import { openPrivacyPolicy } from '@/lib/legal';
 import { COUNTRIES, DEFAULT_COUNTRY } from '@/lib/countries';
 import { INDUSTRY_TYPES, type IndustryType } from '@/lib/types';
 
@@ -117,6 +118,14 @@ export default function SignupScreen() {
       </Text>
 
       <InlineError message={error} />
+
+      <Text style={styles.footerText}>
+        By creating an account you agree to our{' '}
+        <Text style={styles.link} onPress={() => void openPrivacyPolicy()}>
+          Privacy Policy
+        </Text>
+        .
+      </Text>
 
       <Text style={styles.footerText}>
         Already registered?{' '}

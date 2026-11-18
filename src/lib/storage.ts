@@ -5,6 +5,7 @@ const ACCESS_TOKEN_KEY = 'kashmemo_auth_token';
 const REFRESH_TOKEN_KEY = 'kashmemo_auth_token_refresh';
 const USER_KEY = 'kashmemo_session_user';
 const DISPLAY_CURRENCY_KEY = 'kashmemo_display_currency';
+const AI_SCAN_CONSENT_KEY = 'kashmemo_ai_scan_consent';
 
 // SecureStore is native-only; on web fall back to localStorage so the app is
 // still usable in a browser during development.
@@ -91,4 +92,13 @@ export async function readDisplayCurrency(): Promise<{ code: string; rate: numbe
 
 export async function writeDisplayCurrency(value: { code: string; rate: number }) {
   await setItem(DISPLAY_CURRENCY_KEY, JSON.stringify(value));
+}
+
+// Device preference: the user agreed to bills being read by AI (see lib/legal.ts).
+export async function readAiScanConsent(): Promise<boolean> {
+  return (await getItem(AI_SCAN_CONSENT_KEY).catch(() => null)) === '1';
+}
+
+export async function writeAiScanConsent() {
+  await setItem(AI_SCAN_CONSENT_KEY, '1');
 }

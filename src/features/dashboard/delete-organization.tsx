@@ -17,7 +17,8 @@ import { can } from '@/lib/permissions';
 const OTP_LENGTH = 6;
 
 // CEO-only danger zone: deletes the whole organisation after confirming a code
-// emailed to the CEO. Renders nothing for other roles.
+// emailed to the CEO. Renders nothing for other roles: their accounts are
+// created by the organisation, which removes them.
 export function DeleteOrganizationSection() {
   const user = useCurrentUser();
   const [visible, setVisible] = useState(false);

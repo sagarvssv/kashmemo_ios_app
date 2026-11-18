@@ -23,6 +23,7 @@ import {
   uploadInvoice,
   waitForInvoice,
 } from '@/lib/invoices';
+import { ensureAiScanConsent, openPrivacyPolicy } from '@/lib/legal';
 
 import { formatInvoiceAmount, InvoiceResult, messageOf } from './invoice-result';
 import { loadSpendableAdvances } from './receipt-claims';
@@ -208,6 +209,7 @@ export function ReceiptScanCard({ title = 'Scan a receipt', advanceId, onSubmitt
   };
 
   const scan = async (source: Source) => {
+    if (!(await ensureAiScanConsent())) return;
     let picked: Picked | null;
     try {
       picked = await pickReceipt(source);
@@ -284,8 +286,11 @@ export function ReceiptScanCard({ title = 'Scan a receipt', advanceId, onSubmitt
                 <Ionicons name="scan-outline" size={20} color={colors.primary} />
               </View>
               <Text style={styles.introText}>
-                Photograph a receipt or upload one (photo or PDF). The details are read automatically, usually within 30
-                seconds.
+                Photograph a receipt or upload one (photo or PDF). The details are read automatically by AI on Amazon
+                Web Services, usually within 30 seconds.{' '}
+                <Text style={styles.confirmedLink} onPress={() => void openPrivacyPolicy()}>
+                  Privacy policy
+                </Text>
               </Text>
             </View>
             <PrimaryButton label="Take photo" icon="camera-outline" onPress={() => void scan('camera')} />

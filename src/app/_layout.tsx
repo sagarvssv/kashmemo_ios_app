@@ -45,6 +45,8 @@ function RootNavigator() {
       <Stack.Screen name="forgot-password" />
       <Stack.Screen name="verify-otp" />
       <Stack.Screen name="reset-password" />
+      {/* Reachable signed in (Menu) and signed out (signup). */}
+      <Stack.Screen name="privacy-policy" options={{ animation: 'slide_from_right' }} />
 
       <Stack.Protected guard={isSignedIn}>
         <Stack.Screen name="(app)" />

@@ -9,6 +9,7 @@ import { useColors } from '@/constants/brand';
 import { spacing } from '@/constants/theme';
 import { useCurrentUser } from '@/context/session';
 import { DeleteOrganizationSection } from '@/features/dashboard/delete-organization';
+import { openPrivacyPolicy } from '@/lib/legal';
 import { can } from '@/lib/permissions';
 
 // The hamburger tab: money and admin shortcuts. Profile details live behind the
@@ -79,6 +80,17 @@ export default function MenuScreen() {
       <Section title="Preferences">
         <Card>
           <DisplayCurrencyPicker />
+        </Card>
+      </Section>
+
+      <Section title="Legal">
+        <Card style={styles.rows}>
+          <ListRow
+            icon="shield-checkmark-outline"
+            tint={accents.blue}
+            title="Privacy policy"
+            onPress={() => void openPrivacyPolicy()}
+          />
         </Card>
       </Section>
 
