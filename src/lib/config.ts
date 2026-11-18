@@ -1,17 +1,24 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+// Main API. Endpoint paths include the /api prefix (e.g. /api/org/login).
+const MAIN_API_URL = 'https://api.kashmemo.com';
+
+// Set to true to test against the local backend on port 3000 (dev builds only).
+const USE_LOCAL_API = false;
 const BACKEND_PORT = 3000;
 
-// EXPO_PUBLIC_API_URL wins when set. Otherwise, in development, reuse the host
-// the Metro bundler is served from so a physical device or emulator reaches the
-// backend on the developer's machine instead of its own localhost.
+// EXPO_PUBLIC_API_URL wins when set. Otherwise the main API is used, unless
+// USE_LOCAL_API is on in a dev build: then the local backend is reached through
+// the host Metro is served from, so a physical device or emulator hits the
+// developer's machine instead of its own localhost.
 function resolveApiBaseUrl(): string {
   const fromEnv = process.env.EXPO_PUBLIC_API_URL;
   if (fromEnv) return fromEnv.replace(/\/+$/, '');
 
-  const hostUri = Constants.expoConfig?.hostUri;
-  const host = hostUri?.split(':')[0];
+  if (!__DEV__ || !USE_LOCAL_API) return MAIN_API_URL;
+
+  const host = Constants.expoConfig?.hostUri?.split(':')[0];
   if (host) return `http://${host}:${BACKEND_PORT}`;
 
   if (Platform.OS === 'android') return `http://10.0.2.2:${BACKEND_PORT}`;
