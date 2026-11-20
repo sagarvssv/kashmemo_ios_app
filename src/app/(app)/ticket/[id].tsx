@@ -21,7 +21,7 @@ import { errorMessage } from '@/lib/api';
 import { advanceApi, employeeApi, ticketApi } from '@/lib/endpoints';
 import { formatDate, formatDateTime, ROLE_LABELS, shortId, ticketRef } from '@/lib/format';
 import { getInvoice } from '@/lib/invoices';
-import { can, canActOnTicket, canSettleAdvance, settlerLabelFor } from '@/lib/permissions';
+import { can, canActOnTicket, canHandOverCash, canSettleAdvance, settlerLabelFor } from '@/lib/permissions';
 import type { EmployeeDetails, Ticket, TicketStatus } from '@/lib/types';
 import { useMoney } from '@/lib/use-money';
 
@@ -102,7 +102,13 @@ export default function TicketDetailScreen() {
     status: data.status,
     source: data.source,
   });
-  const canDisburse = can.disburse(user.role) && data.status === 'APPROVED';
+  const canDisburse = canHandOverCash({
+    myRole: user.role,
+    myId: user.userId,
+    raisedBy: data.raisedBy,
+    raiserRole: raiser.data?.role,
+    status: data.status,
+  });
   const advanceData = advance.data;
   const pendingBills = advanceData?.bills.filter((bill) => bill.status === 'PENDING').length ?? 0;
   const canSpend = isMine && isAdvance && data.status === 'DISBURSED';
@@ -329,6 +335,9 @@ export default function TicketDetailScreen() {
             Amounts above the manager&apos;s approval limit need sign-off from both a Manager and the CEO.
           </Text>
         )}
+        {isMine && isAdvance && data.status === 'APPROVED' && (
+          <Text style={styles.note}>Approved. {Settler} will hand over your cash.</Text>
+        )}
         {data.status === 'REJECTED' && data.rejectionReason ? (
           <View style={styles.rejection}>
             <Text style={styles.rejectionLabel}>Reason for rejection</Text>
@@ -342,7 +351,7 @@ export default function TicketDetailScreen() {
           <Card>
             {isMine && data.status === 'APPROVED' ? (
               <View style={styles.collect}>
-                <Text style={styles.collectText}>Your bill was approved. Please collect your cash from finance.</Text>
+                <Text style={styles.collectText}>Your bill was approved. Please collect your cash from {settler}.</Text>
               </View>
             ) : null}
             {receipt.data ? <ReceiptFileViewer invoice={receipt.data} /> : null}

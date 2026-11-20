@@ -18,6 +18,7 @@ export const can = {
   deleteEmployeeOrgWide: (role: UserRole) => role === 'CEO' || role === 'HR',
   manageOwnDepartmentEmployees: (role: UserRole) => role === 'MANAGER',
   allocateBudget: (role: UserRole) => role === 'CEO' || role === 'FINANCE_MANAGER',
+  // Coarse check only; use canHandOverCash() for a specific ticket.
   disburse: (role: UserRole) => ORG_ADMIN_ROLES.includes(role),
   manageManagers: (role: UserRole) => role === 'CEO',
   viewDisbursedReport: (role: UserRole) => role === 'CEO',
@@ -46,6 +47,29 @@ export function approverRolesFor(raiserRole: UserRole): UserRole[] {
 export function settlerRolesFor(raiserRole: UserRole): UserRole[] {
   if (raiserRole === 'FINANCE_MANAGER') return ['CEO'];
   return ['FINANCE_MANAGER', 'CEO'];
+}
+
+// Same table as getAllowedHandOverCashRoles() in the backend:
+// a Finance Manager's own ticket is paid out by the CEO only.
+export function handOverRolesFor(raiserRole: UserRole): UserRole[] {
+  if (raiserRole === 'FINANCE_MANAGER') return ['CEO'];
+  return ['FINANCE_MANAGER', 'CEO', 'HR'];
+}
+
+// Hand over cash (advance) / mark as paid (bill). Nobody pays out their own
+// ticket (disburseTicket in the backend).
+export function canHandOverCash(params: {
+  myRole: UserRole;
+  myId: string;
+  raisedBy: string;
+  raiserRole: UserRole | undefined;
+  status: TicketStatus;
+}) {
+  const { myRole, myId, raisedBy, raiserRole, status } = params;
+  if (status !== 'APPROVED' || myId === raisedBy) return false;
+  // Until the raiser's role has loaded, don't offer the button.
+  if (!raiserRole) return false;
+  return handOverRolesFor(raiserRole).includes(myRole);
 }
 
 // Who the raiser hands their cash to / gets paid by at settlement.
