@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { io, type Socket } from 'socket.io-client';
 
 import { onSessionExpired, refreshAccessToken } from '@/lib/api';
@@ -15,7 +16,9 @@ export type RealtimeEvent =
   | 'ticket:status-update'
   | 'budget:update'
   | 'employee:created'
-  | 'employee:update';
+  | 'employee:update'
+  // Sent to one user when the CEO changes their role (changeEmployeeRole).
+  | 'session:role-changed';
 
 type Listener = (payload: unknown) => void;
 
@@ -46,6 +49,7 @@ const REALTIME_EVENTS: RealtimeEvent[] = [
   'budget:update',
   'employee:created',
   'employee:update',
+  'session:role-changed',
 ];
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
@@ -82,8 +86,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // The signed-in user's current role and department, for comparing with the server.
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  // Loads the profile. When the CEO has changed this user's role (or department),
+  // the access token still carries the old one, so the backend would keep
+  // applying the old permissions: get a fresh token first, then switch the UI
+  // (dashboard, tabs and brand all follow user.role).
   const refreshProfile = useCallback(async () => {
     const { data } = await authApi.profile();
+    const current = userRef.current;
+    if (current && (current.role !== data.role || (current.departmentId ?? null) !== (data.departmentId ?? null))) {
+      await refreshAccessToken();
+    }
     applyProfile(data);
   }, [applyProfile]);
 
@@ -125,30 +143,29 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return () => onSessionExpired(null);
   }, []);
 
-  // Keep the profile and the notification badge fresh whenever someone is signed in.
+  // Keep the profile (and so the role) and the notification badge fresh whenever
+  // someone is signed in: on sign-in/launch and each time the app comes back to
+  // the foreground, in case a role change was missed while it was in the background.
   const userId = user?.userId;
   useEffect(() => {
     if (!userId) return;
-    let cancelled = false;
-    authApi
-      .profile()
-      .then(({ data }) => {
-        if (!cancelled) applyProfile(data);
-      })
-      .catch(() => {});
-    notificationApi
-      .unreadCount()
-      .then(({ data }) => {
-        if (!cancelled) setUnreadCount(typeof data === 'number' ? data : 0);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
+    const sync = () => {
+      refreshProfile().catch(() => {});
+      void refreshUnreadCount();
     };
-  }, [userId, applyProfile]);
+    sync();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') sync();
+    });
+    return () => subscription.remove();
+  }, [userId, refreshProfile, refreshUnreadCount]);
 
   // Live updates over Socket.IO. The backend authenticates with the access
   // token in the handshake, so a rejected handshake triggers one refresh.
+  // The server puts the socket in rooms by role and department at connect time,
+  // so reconnect when either changes.
+  const userRole = user?.role;
+  const userDepartmentId = user?.departmentId;
   useEffect(() => {
     if (!userId) return;
     let triedRefresh = false;
@@ -171,6 +188,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     for (const event of REALTIME_EVENTS) {
       socket.on(event, (payload: unknown) => {
         if (event === 'notification') setUnreadCount((count) => count + 1);
+        if (event === 'session:role-changed') refreshProfile().catch(() => {});
         // The raiser also receives their own ticket:created; only count other people's bills.
         if (event === 'ticket:created') {
           const raisedBy = (payload as { ticket?: { raisedBy?: string } } | null)?.ticket?.raisedBy;
@@ -183,7 +201,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return () => {
       socket.disconnect();
     };
-  }, [userId]);
+  }, [userId, userRole, userDepartmentId, refreshProfile]);
 
   const signIn = useCallback(
     async (email: string, password: string) => {
